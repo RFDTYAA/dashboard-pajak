@@ -3,24 +3,24 @@ import { ArrowLeft, Clock3, MapPin, Search } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import "leaflet/dist/leaflet.css";
 import {
-  createEmptyWajibPajakDetail,
-  normalizeFormKategori,
-  normalizeJenisPOS,
-  normalizeNpwpd,
-} from "../types/domain";
-import type {
-  FormKategori as Kategori,
-  JenisPOS,
-  WajibPajakDetailData,
-  WajibPajakPayload,
-} from "../types/domain";
-import { getWajibPajakDetail, updateWajibPajak } from "../services/wajibPajak";
+  getBusinessTypes,
+  getCities,
+  getPosTypes,
+  getWajibPajakDetail,
+  updateWajibPajak,
+  type BusinessTypeOption,
+  type CityOption,
+  type PosTypeOption,
+  type WajibPajakBackendPayload,
+} from "../services/wajibPajak";
 
 type SearchResult = {
   display_name: string;
   lat: string;
   lon: string;
 };
+
+type Tone = "amber" | "green" | "blue" | "purple" | "slate";
 
 type LeafletLatLng = {
   lat: number;
@@ -106,60 +106,158 @@ function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function formatCoordinate(value: number) {
   return value.toFixed(6);
 }
 
-function getDetailLatitude(data: WajibPajakDetailData) {
-  if (typeof data.latitude === "number") return data.latitude;
-  if (typeof data.lat === "number") return data.lat;
-  return 4.6276;
+function toNumber(value: unknown, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return fallback;
 }
 
-function getDetailLongitude(data: WajibPajakDetailData) {
-  if (typeof data.longitude === "number") return data.longitude;
-  if (typeof data.lng === "number") return data.lng;
-  return 96.8577;
+function isAllowedBusinessType(name: string) {
+  const lower = name.toLowerCase();
+
+  if (lower.includes("listrik")) return false;
+
+  return (
+    lower.includes("hotel") ||
+    lower.includes("restaurant") ||
+    lower.includes("restoran") ||
+    lower.includes("hiburan") ||
+    lower.includes("kesenian") ||
+    lower.includes("parkir")
+  );
+}
+
+function getBusinessTypeLabel(name: string) {
+  const lower = name.toLowerCase();
+
+  if (lower.includes("hiburan") || lower.includes("kesenian")) {
+    return "Hiburan & Kesenian";
+  }
+
+  if (lower.includes("parkir")) return "Jasa Parkir";
+  if (lower.includes("hotel")) return "Hotel";
+
+  return "Restaurant";
+}
+
+function getToneByName(name: string): Tone {
+  const lower = name.toLowerCase();
+
+  if (lower.includes("hotel")) return "amber";
+  if (lower.includes("hiburan") || lower.includes("kesenian")) return "green";
+  if (lower.includes("parkir")) return "purple";
+  if (lower.includes("restaurant") || lower.includes("restoran")) return "blue";
+
+  return "slate";
+}
+
+function getToneStyle(tone: Tone, active: boolean) {
+  if (tone === "amber") {
+    return {
+      bg: active ? "#F59E0B" : "#FFF7ED",
+      fg: active ? "#FFFFFF" : "#C2410C",
+      border: active ? "#F59E0B" : "rgba(245,158,11,0.24)",
+      shadow: active ? "0 10px 22px rgba(245,158,11,0.22)" : "none",
+    };
+  }
+
+  if (tone === "green") {
+    return {
+      bg: active ? "#10B981" : "#ECFDF5",
+      fg: active ? "#FFFFFF" : "#047857",
+      border: active ? "#10B981" : "rgba(16,185,129,0.24)",
+      shadow: active ? "0 10px 22px rgba(16,185,129,0.22)" : "none",
+    };
+  }
+
+  if (tone === "purple") {
+    return {
+      bg: active ? "#9333EA" : "#F3E8FF",
+      fg: active ? "#FFFFFF" : "#7E22CE",
+      border: active ? "#9333EA" : "rgba(147,51,234,0.24)",
+      shadow: active ? "0 10px 22px rgba(147,51,234,0.22)" : "none",
+    };
+  }
+
+  if (tone === "slate") {
+    return {
+      bg: active ? "#475569" : "#F8FAFC",
+      fg: active ? "#FFFFFF" : "#334155",
+      border: active ? "#475569" : "rgba(71,85,105,0.24)",
+      shadow: active ? "0 10px 22px rgba(71,85,105,0.18)" : "none",
+    };
+  }
+
+  return {
+    bg: active ? "#3B82F6" : "#EFF6FF",
+    fg: active ? "#FFFFFF" : "#1D4ED8",
+    border: active ? "#3B82F6" : "rgba(59,130,246,0.24)",
+    shadow: active ? "0 10px 22px rgba(59,130,246,0.22)" : "none",
+  };
+}
+
+function getMasterIdByName(
+  options: Array<{ id: string; name: string }>,
+  name?: string,
+) {
+  const normalizedName = String(name ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalizedName) return "";
+
+  const exact = options.find(
+    (item) => item.name.trim().toLowerCase() === normalizedName,
+  );
+
+  if (exact) return exact.id;
+
+  const fuzzy = options.find((item) => {
+    const optionName = item.name.trim().toLowerCase();
+    return (
+      optionName.includes(normalizedName) || normalizedName.includes(optionName)
+    );
+  });
+
+  return fuzzy?.id ?? "";
 }
 
 function KategoriButton({
   active,
   label,
   tone,
+  disabled,
   onClick,
 }: {
   active: boolean;
   label: string;
-  tone: "amber" | "green" | "blue";
+  tone: Tone;
+  disabled?: boolean;
   onClick: () => void;
 }) {
-  const toneStyle =
-    tone === "amber"
-      ? {
-          bg: active ? "#F59E0B" : "#FFF7ED",
-          fg: active ? "#FFFFFF" : "#C2410C",
-          border: active ? "#F59E0B" : "rgba(245,158,11,0.24)",
-          shadow: active ? "0 10px 22px rgba(245,158,11,0.22)" : "none",
-        }
-      : tone === "green"
-        ? {
-            bg: active ? "#10B981" : "#ECFDF5",
-            fg: active ? "#FFFFFF" : "#047857",
-            border: active ? "#10B981" : "rgba(16,185,129,0.24)",
-            shadow: active ? "0 10px 22px rgba(16,185,129,0.22)" : "none",
-          }
-        : {
-            bg: active ? "#3B82F6" : "#EFF6FF",
-            fg: active ? "#FFFFFF" : "#1D4ED8",
-            border: active ? "#3B82F6" : "rgba(59,130,246,0.24)",
-            shadow: active ? "0 10px 22px rgba(59,130,246,0.22)" : "none",
-          };
+  const toneStyle = getToneStyle(tone, active);
 
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
-      className="px-4 py-2 rounded-full text-sm transition-all duration-200 hover:-translate-y-0.5"
+      className="px-4 py-2 rounded-full text-sm transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed"
       style={{
         backgroundColor: toneStyle.bg,
         color: toneStyle.fg,
@@ -176,17 +274,20 @@ function KategoriButton({
 function PosButton({
   active,
   label,
+  disabled,
   onClick,
 }: {
   active: boolean;
-  label: JenisPOS;
+  label: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
-      className="min-w-20.5 px-4 py-2 rounded-full text-sm transition-all duration-200 hover:-translate-y-0.5"
+      className="min-w-20.5 px-4 py-2 rounded-full text-sm transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 disabled:cursor-not-allowed"
       style={{
         backgroundColor: active ? "#0F172A" : "#FFFFFF",
         color: active ? "#FFFFFF" : "#334155",
@@ -222,8 +323,8 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
       )}
       style={{
         border: `1px solid ${THEME.border}`,
-        backgroundColor: "#FFFFFF",
-        color: THEME.text,
+        backgroundColor: props.disabled ? "#F8FAFC" : "#FFFFFF",
+        color: props.disabled ? "#94A3B8" : THEME.text,
         ...props.style,
       }}
     />
@@ -241,22 +342,59 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
       )}
       style={{
         border: `1px solid ${THEME.border}`,
-        backgroundColor: "#FFFFFF",
-        color: THEME.text,
+        backgroundColor: props.disabled ? "#F8FAFC" : "#FFFFFF",
+        color: props.disabled ? "#94A3B8" : THEME.text,
         ...props.style,
       }}
     />
   );
 }
 
+function SelectInput({
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  options: CityOption[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full h-12 rounded-xl px-4 text-sm outline-none transition-all duration-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+      style={{
+        border: `1px solid ${THEME.border}`,
+        backgroundColor: disabled ? "#F8FAFC" : "#FFFFFF",
+        color: value ? THEME.text : THEME.muted,
+      }}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((item) => (
+        <option key={item.id} value={item.id}>
+          {item.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function TimeField({
   label,
+  disabled,
   enabled,
   value,
   onToggle,
   onChange,
 }: {
   label: string;
+  disabled?: boolean;
   enabled: boolean;
   value: string;
   onToggle: (checked: boolean) => void;
@@ -271,6 +409,7 @@ function TimeField({
           <input
             type="checkbox"
             checked={enabled}
+            disabled={disabled}
             onChange={(e) => onToggle(e.target.checked)}
             className="sr-only"
           />
@@ -306,11 +445,13 @@ function TimeField({
         <input
           type="time"
           value={value}
-          disabled={!enabled}
+          disabled={disabled || !enabled}
           onChange={(e) => onChange(e.target.value)}
           className="w-full h-12 rounded-xl pl-11 pr-4 text-sm outline-none transition-all duration-200 disabled:cursor-not-allowed disabled:bg-slate-50"
           style={{
-            border: `1px solid ${enabled ? "rgba(30,99,214,0.24)" : THEME.border}`,
+            border: `1px solid ${
+              enabled ? "rgba(30,99,214,0.24)" : THEME.border
+            }`,
             backgroundColor: enabled ? "#FFFFFF" : "#F8FAFC",
             color: enabled ? THEME.text : "#94A3B8",
           }}
@@ -323,39 +464,35 @@ function TimeField({
 export default function EditWajibPajak() {
   const navigate = useNavigate();
   const params = useParams();
-  const rawId = Number(params.id ?? "1");
-  const safeId = Number.isFinite(rawId) && rawId > 0 ? rawId : 1;
 
-  const initialData = useMemo(
-    () => createEmptyWajibPajakDetail(safeId),
-    [safeId],
-  );
+  const safeId = String(params.id ?? "").trim();
+  const validId = isUuid(safeId);
 
-  const [npwpd, setNpwpd] = useState(normalizeNpwpd(initialData.npwpd));
-  const [kategori, setKategori] = useState<Kategori>(
-    normalizeFormKategori(initialData.tipeUsaha),
-  );
-  const [namaUsaha, setNamaUsaha] = useState(initialData.namaUsaha);
-  const [telp, setTelp] = useState(initialData.telp);
-  const [email, setEmail] = useState(initialData.email);
-  const [jamBukaAktif, setJamBukaAktif] = useState(
-    Boolean(initialData.jamBuka),
-  );
-  const [jamBuka, setJamBuka] = useState(initialData.jamBuka || "08:00");
-  const [jamTutupAktif, setJamTutupAktif] = useState(
-    Boolean(initialData.jamTutup),
-  );
-  const [jamTutup, setJamTutup] = useState(initialData.jamTutup || "22:00");
-  const [jenisPos, setJenisPos] = useState<JenisPOS>(
-    normalizeJenisPOS(initialData.jenisPOS ?? initialData.jenisPos),
-  );
-  const [alamat, setAlamat] = useState(initialData.alamat);
-  const [latitude, setLatitude] = useState(getDetailLatitude(initialData));
-  const [longitude, setLongitude] = useState(getDetailLongitude(initialData));
+  const [npwpd, setNpwpd] = useState("");
+  const [businessTypes, setBusinessTypes] = useState<BusinessTypeOption[]>([]);
+  const [kategoriId, setKategoriId] = useState("");
+  const [namaUsaha, setNamaUsaha] = useState("");
+  const [telp, setTelp] = useState("");
+  const [email, setEmail] = useState("");
+  const [jamBukaAktif, setJamBukaAktif] = useState(true);
+  const [jamBuka, setJamBuka] = useState("08:00");
+  const [jamTutupAktif, setJamTutupAktif] = useState(true);
+  const [jamTutup, setJamTutup] = useState("22:00");
+  const [posTypes, setPosTypes] = useState<PosTypeOption[]>([]);
+  const [jenisPosId, setJenisPosId] = useState("");
+  const [cities, setCities] = useState<CityOption[]>([]);
+  const [citiesId, setCitiesId] = useState("");
+  const [alamat, setAlamat] = useState("");
+  const [latitude, setLatitude] = useState(4.6276);
+  const [longitude, setLongitude] = useState(96.8577);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [loadingMaster, setLoadingMaster] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMapLike | null>(null);
@@ -372,38 +509,87 @@ export default function EditWajibPajak() {
 
   useEffect(() => {
     const controller = new AbortController();
-    let alive = true;
 
-    const run = async () => {
+    async function loadPageData() {
+      if (!validId) {
+        setErrorMessage(
+          "ID wajib pajak tidak valid. Buka halaman edit dari tombol Ubah Data di tabel/detail.",
+        );
+        setLoadingMaster(false);
+        setLoadingDetail(false);
+        return;
+      }
+
       try {
-        const detail = await getWajibPajakDetail(safeId, controller.signal);
-        if (!alive) return;
+        setLoadingMaster(true);
+        setLoadingDetail(true);
+        setErrorMessage("");
 
-        setNpwpd(normalizeNpwpd(detail.npwpd));
-        setKategori(normalizeFormKategori(detail.tipeUsaha));
-        setNamaUsaha(detail.namaUsaha);
-        setTelp(detail.telp);
-        setEmail(detail.email);
+        const [businessTypeRows, posTypeRows, cityRows, detail] =
+          await Promise.all([
+            getBusinessTypes(controller.signal),
+            getPosTypes(controller.signal),
+            getCities(controller.signal),
+            getWajibPajakDetail(safeId, controller.signal),
+          ]);
+
+        const filteredBusinessTypes = businessTypeRows.filter((item) =>
+          isAllowedBusinessType(item.name),
+        );
+
+        setBusinessTypes(filteredBusinessTypes);
+        setPosTypes(posTypeRows);
+        setCities(cityRows);
+
+        setNpwpd(String(detail.npwpd ?? ""));
+        setNamaUsaha(String(detail.namaUsaha ?? ""));
+        setTelp(String(detail.telp ?? ""));
+        setEmail(String(detail.email ?? ""));
         setJamBukaAktif(Boolean(detail.jamBuka));
         setJamBuka(detail.jamBuka || "08:00");
         setJamTutupAktif(Boolean(detail.jamTutup));
         setJamTutup(detail.jamTutup || "22:00");
-        setJenisPos(normalizeJenisPOS(detail.jenisPOS ?? detail.jenisPos));
-        setAlamat(detail.alamat);
-        setLatitude(getDetailLatitude(detail));
-        setLongitude(getDetailLongitude(detail));
-      } catch {
-        if (!alive || controller.signal.aborted) return;
+        setAlamat(String(detail.alamat ?? ""));
+        setLatitude(toNumber(detail.latitude ?? detail.lat, 4.6276));
+        setLongitude(toNumber(detail.longitude ?? detail.lng, 96.8577));
+
+        const kategoriFromDetail =
+          detail.businessTypeId ||
+          getMasterIdByName(filteredBusinessTypes, detail.tipeUsaha) ||
+          filteredBusinessTypes[0]?.id ||
+          "";
+
+        const jenisPosFromDetail =
+          detail.posTypeId ||
+          getMasterIdByName(posTypeRows, detail.jenisPOS ?? detail.jenisPos) ||
+          posTypeRows[0]?.id ||
+          "";
+
+        const cityFromDetail = detail.citiesId || cityRows[0]?.id || "";
+
+        setKategoriId(kategoriFromDetail);
+        setJenisPosId(jenisPosFromDetail);
+        setCitiesId(cityFromDetail);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Gagal memuat data wajib pajak.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingMaster(false);
+          setLoadingDetail(false);
+        }
       }
-    };
+    }
 
-    void run();
+    void loadPageData();
 
-    return () => {
-      alive = false;
-      controller.abort();
-    };
-  }, [safeId]);
+    return () => controller.abort();
+  }, [safeId, validId]);
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -420,7 +606,10 @@ export default function EditWajibPajak() {
   useEffect(() => {
     let alive = true;
 
-    const setupMap = async () => {
+    const initialLatitude = latitude;
+    const initialLongitude = longitude;
+
+    async function setupMap() {
       if (!mapDivRef.current) return;
 
       const mod = (await import("leaflet")) as unknown as { default: unknown };
@@ -434,7 +623,7 @@ export default function EditWajibPajak() {
       }
 
       const map = L.map(mapDivRef.current, {
-        center: [latitude, longitude],
+        center: [initialLatitude, initialLongitude],
         zoom: 14,
         zoomControl: true,
         scrollWheelZoom: true,
@@ -457,7 +646,7 @@ export default function EditWajibPajak() {
         shadowSize: [41, 41],
       });
 
-      const marker = L.marker([latitude, longitude], {
+      const marker = L.marker([initialLatitude, initialLongitude], {
         draggable: true,
         icon,
       })
@@ -484,7 +673,7 @@ export default function EditWajibPajak() {
 
       markerRef.current = marker;
       mapRef.current = map;
-    };
+    }
 
     void setupMap();
 
@@ -495,7 +684,7 @@ export default function EditWajibPajak() {
         mapRef.current = null;
       }
     };
-  }, [latitude, longitude]);
+  });
 
   useEffect(() => {
     if (!markerRef.current || !mapRef.current) return;
@@ -551,31 +740,58 @@ export default function EditWajibPajak() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const payload: WajibPajakPayload = {
+    if (!validId) {
+      alert("ID wajib pajak tidak valid.");
+      return;
+    }
+
+    if (!kategoriId) {
+      alert("Kategori usaha wajib dipilih.");
+      return;
+    }
+
+    if (!jenisPosId) {
+      alert("Jenis POS wajib dipilih.");
+      return;
+    }
+
+    if (!citiesId) {
+      alert("Kota/Kabupaten wajib dipilih.");
+      return;
+    }
+
+    const payload: WajibPajakBackendPayload = {
       npwpd,
-      kategori,
+      kategori: kategoriId,
       namaUsaha,
       telp,
       email,
       jamBuka: jamBukaAktif ? jamBuka : null,
       jamTutup: jamTutupAktif ? jamTutup : null,
-      jenisPos,
+      jenisPos: jenisPosId,
       alamat,
       latitude,
       longitude,
+      citiesId,
     };
 
     try {
+      setSaving(true);
       await updateWajibPajak(safeId, payload);
-      alert("Perubahan data wajib pajak berhasil diproses");
+      alert("Perubahan data wajib pajak berhasil disimpan");
+      navigate(`/wajib-pajak/${safeId}`);
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
           : "Gagal memperbarui data wajib pajak.",
       );
+    } finally {
+      setSaving(false);
     }
   }
+
+  const isLoading = loadingMaster || loadingDetail;
 
   return (
     <div
@@ -592,7 +808,7 @@ export default function EditWajibPajak() {
         <div className="px-6 md:px-8 py-6 md:py-7 flex items-center gap-4">
           <button
             type="button"
-            onClick={() => navigate(`/wajib-pajak/${safeId}`)}
+            onClick={() => navigate("/wajib-pajak")}
             className="text-white/95 hover:text-white transition shrink-0"
           >
             <ArrowLeft className="w-7 h-7" strokeWidth={1.8} />
@@ -605,12 +821,7 @@ export default function EditWajibPajak() {
             >
               {BRAND.title}
             </div>
-            <div
-              className="text-white/80 text-sm mt-1"
-              style={{ fontWeight: 400 }}
-            >
-              {BRAND.subtitle}
-            </div>
+            <div className="text-white/80 text-sm mt-1">{BRAND.subtitle}</div>
           </div>
         </div>
       </nav>
@@ -626,12 +837,42 @@ export default function EditWajibPajak() {
           }}
         >
           <section>
-            <h2
-              className="text-[28px] mb-8"
-              style={{ color: "#1F2937", fontWeight: 700 }}
-            >
-              Informasi Umum
-            </h2>
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-8">
+              <h2
+                className="text-[28px]"
+                style={{ color: "#1F2937", fontWeight: 700 }}
+              >
+                Informasi Umum
+              </h2>
+
+              {isLoading && !errorMessage && (
+                <div
+                  className="rounded-xl px-4 py-2 text-sm"
+                  style={{
+                    backgroundColor: "#EFF6FF",
+                    color: "#1D4ED8",
+                    border: "1px solid #BFDBFE",
+                    fontWeight: 700,
+                  }}
+                >
+                  Memuat data...
+                </div>
+              )}
+            </div>
+
+            {errorMessage && (
+              <div
+                className="mb-5 rounded-xl px-4 py-3 text-sm"
+                style={{
+                  backgroundColor: "#FEF2F2",
+                  color: "#B91C1C",
+                  border: "1px solid #FECACA",
+                  fontWeight: 600,
+                }}
+              >
+                {errorMessage}
+              </div>
+            )}
 
             <div className="space-y-5">
               <div>
@@ -643,30 +884,38 @@ export default function EditWajibPajak() {
                   }
                   placeholder="Masukkan NPWPD (16 digit)"
                   inputMode="numeric"
+                  disabled={isLoading || !validId}
+                  required
                 />
               </div>
 
               <div>
                 <InputLabel>Kategori Usaha</InputLabel>
                 <div className="flex flex-wrap gap-3">
-                  <KategoriButton
-                    active={kategori === "Hotel"}
-                    label="Hotel"
-                    tone="amber"
-                    onClick={() => setKategori("Hotel")}
-                  />
-                  <KategoriButton
-                    active={kategori === "Hiburan"}
-                    label="Hiburan"
-                    tone="green"
-                    onClick={() => setKategori("Hiburan")}
-                  />
-                  <KategoriButton
-                    active={kategori === "Restaurant"}
-                    label="Restaurant"
-                    tone="blue"
-                    onClick={() => setKategori("Restaurant")}
-                  />
+                  {loadingMaster && businessTypes.length === 0 ? (
+                    <span className="text-sm text-slate-400">
+                      Memuat kategori usaha...
+                    </span>
+                  ) : businessTypes.length === 0 ? (
+                    <span className="text-sm text-red-500">
+                      Data kategori usaha belum tersedia.
+                    </span>
+                  ) : (
+                    businessTypes.map((item) => {
+                      const label = getBusinessTypeLabel(item.name);
+
+                      return (
+                        <KategoriButton
+                          key={item.id}
+                          active={kategoriId === item.id}
+                          label={label}
+                          tone={getToneByName(item.name)}
+                          disabled={isLoading || !validId || !item.isActive}
+                          onClick={() => setKategoriId(item.id)}
+                        />
+                      );
+                    })
+                  )}
                 </div>
                 <p className="text-xs mt-3" style={{ color: "#94A3B8" }}>
                   Pilih salah satu kategori usaha.
@@ -679,6 +928,8 @@ export default function EditWajibPajak() {
                   value={namaUsaha}
                   onChange={(e) => setNamaUsaha(e.target.value)}
                   placeholder="Masukkan Nama Usaha"
+                  disabled={isLoading || !validId}
+                  required
                 />
               </div>
 
@@ -689,6 +940,7 @@ export default function EditWajibPajak() {
                     value={telp}
                     onChange={(e) => setTelp(e.target.value)}
                     placeholder="+62 8..."
+                    disabled={isLoading || !validId}
                   />
                 </div>
 
@@ -699,6 +951,7 @@ export default function EditWajibPajak() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="username@gmail.com"
                     type="email"
+                    disabled={isLoading || !validId}
                   />
                 </div>
               </div>
@@ -706,6 +959,7 @@ export default function EditWajibPajak() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <TimeField
                   label="Jam Buka"
+                  disabled={isLoading || !validId}
                   enabled={jamBukaAktif}
                   value={jamBuka}
                   onToggle={setJamBukaAktif}
@@ -714,6 +968,7 @@ export default function EditWajibPajak() {
 
                 <TimeField
                   label="Jam Tutup"
+                  disabled={isLoading || !validId}
                   enabled={jamTutupAktif}
                   value={jamTutup}
                   onToggle={setJamTutupAktif}
@@ -724,16 +979,25 @@ export default function EditWajibPajak() {
               <div>
                 <InputLabel>Jenis Pos</InputLabel>
                 <div className="flex flex-wrap gap-3">
-                  <PosButton
-                    active={jenisPos === "Tab"}
-                    label="Tab"
-                    onClick={() => setJenisPos("Tab")}
-                  />
-                  <PosButton
-                    active={jenisPos === "T-107"}
-                    label="T-107"
-                    onClick={() => setJenisPos("T-107")}
-                  />
+                  {loadingMaster && posTypes.length === 0 ? (
+                    <span className="text-sm text-slate-400">
+                      Memuat jenis POS...
+                    </span>
+                  ) : posTypes.length === 0 ? (
+                    <span className="text-sm text-red-500">
+                      Data jenis POS belum tersedia.
+                    </span>
+                  ) : (
+                    posTypes.map((item) => (
+                      <PosButton
+                        key={item.id}
+                        active={jenisPosId === item.id}
+                        label={item.name}
+                        disabled={isLoading || !validId}
+                        onClick={() => setJenisPosId(item.id)}
+                      />
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -778,7 +1042,8 @@ export default function EditWajibPajak() {
                           }
                         }}
                         placeholder="Cari lokasi di peta..."
-                        className="w-full h-11 rounded-xl pl-11 pr-24 text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                        disabled={isLoading || !validId}
+                        className="w-full h-11 rounded-xl pl-11 pr-24 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:cursor-not-allowed"
                         style={{
                           border: `1px solid ${THEME.border}`,
                           backgroundColor: "#FFFFFF",
@@ -788,10 +1053,11 @@ export default function EditWajibPajak() {
 
                       <button
                         type="button"
+                        disabled={isLoading || !validId}
                         onClick={() => {
                           void handleSearchLocation();
                         }}
-                        className="absolute right-1.5 top-1.5 h-8 px-4 rounded-lg text-sm transition hover:-translate-y-0.5"
+                        className="absolute right-1.5 top-1.5 h-8 px-4 rounded-lg text-sm transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0 disabled:cursor-not-allowed"
                         style={{
                           backgroundColor: THEME.accent,
                           color: "#FFFFFF",
@@ -858,8 +1124,30 @@ export default function EditWajibPajak() {
                     value={alamat}
                     onChange={(e) => setAlamat(e.target.value)}
                     placeholder="Masukkan alamat lengkap usaha"
-                    rows={11}
+                    rows={8}
+                    disabled={isLoading || !validId}
+                    required
                   />
+                </div>
+
+                <div>
+                  <InputLabel>Kota/Kabupaten</InputLabel>
+                  <SelectInput
+                    value={citiesId}
+                    options={cities}
+                    disabled={isLoading || !validId}
+                    placeholder={
+                      loadingMaster
+                        ? "Memuat kota/kabupaten..."
+                        : "Pilih kota/kabupaten"
+                    }
+                    onChange={setCitiesId}
+                  />
+                  {cities.length === 0 && !loadingMaster && (
+                    <p className="text-xs mt-2" style={{ color: "#DC2626" }}>
+                      Data kota/kabupaten belum tersedia dari backend.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-5">
@@ -873,37 +1161,15 @@ export default function EditWajibPajak() {
                     <TextInput value={coordsLabel.lng} readOnly />
                   </div>
                 </div>
-
-                <div
-                  className="rounded-2xl p-4"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, rgba(30,99,214,0.08), rgba(59,130,246,0.04))",
-                    border: "1px solid rgba(30,99,214,0.12)",
-                  }}
-                >
-                  <div
-                    className="text-sm mb-1"
-                    style={{ color: THEME.accent, fontWeight: 700 }}
-                  >
-                    Info Lokasi
-                  </div>
-                  <div
-                    className="text-sm leading-6"
-                    style={{ color: "#475569", fontWeight: 500 }}
-                  >
-                    Latitude dan longitude akan otomatis mengikuti pin pada
-                    peta. Alamat diisi manual agar detail alamat tetap lengkap.
-                  </div>
-                </div>
               </div>
             </div>
 
             <div className="mt-10 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => navigate(`/wajib-pajak/${safeId}`)}
-                className="h-11 px-6 rounded-xl transition hover:-translate-y-0.5"
+                disabled={saving}
+                onClick={() => navigate("/wajib-pajak")}
+                className="h-11 px-6 rounded-xl transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
                 style={{
                   backgroundColor: "#FFFFFF",
                   color: THEME.accent,
@@ -916,7 +1182,8 @@ export default function EditWajibPajak() {
 
               <button
                 type="submit"
-                className="h-11 px-7 rounded-xl transition hover:-translate-y-0.5"
+                disabled={saving || isLoading || !validId}
+                className="h-11 px-7 rounded-xl transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: THEME.accent,
                   color: "#FFFFFF",
@@ -925,7 +1192,7 @@ export default function EditWajibPajak() {
                   fontWeight: 700,
                 }}
               >
-                Simpan Perubahan
+                {saving ? "Menyimpan..." : "Simpan Perubahan"}
               </button>
             </div>
           </section>

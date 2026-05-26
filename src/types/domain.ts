@@ -1,13 +1,23 @@
-export type DashboardKategori = "Restaurant" | "Hotel" | "Hiburan & Kesenian";
-export type FormKategori = "Hotel" | "Hiburan" | "Restaurant";
+export type DashboardKategori =
+  | "Restaurant"
+  | "Hotel"
+  | "Hiburan & Kesenian"
+  | "Jasa Parkir";
+
+export type FormKategori = DashboardKategori;
+
 export type KategoriFilter = "Semua" | DashboardKategori;
-export type JenisPOS = "Tab" | "T-107";
+
+export type JenisPOS = "Advan Tab VX Neo" | "T-107";
 export type JenisPOSFilter = "Semua" | JenisPOS;
+
 export type StatusUsaha = "Aktif" | "Nonaktif";
+
 export type PeriodeAnalisis =
   | "1 Tahun Terakhir"
   | "6 Bulan Terakhir"
   | "3 Bulan Terakhir";
+
 export type KecamatanFilter =
   | "Semua"
   | "Bebesen"
@@ -19,6 +29,7 @@ export type DashboardSummary = {
   totalRestaurant: number;
   totalHotel: number;
   totalHiburan: number;
+  totalJasaParkir: number;
   totalSemua: number;
 };
 
@@ -67,6 +78,7 @@ export type WajibPajakListResponse = {
     hotel: number;
     restaurant: number;
     hiburan: number;
+    jasaParkir: number;
   };
   pagination: {
     page: number;
@@ -94,6 +106,9 @@ export type WajibPajakDetailData = {
   lng?: number;
   latitude?: number;
   longitude?: number;
+  businessTypeId?: string;
+  posTypeId?: string;
+  citiesId?: string;
 };
 
 export type WajibPajakPayload = {
@@ -108,6 +123,7 @@ export type WajibPajakPayload = {
   alamat: string;
   latitude: number;
   longitude: number;
+  citiesId?: string;
 };
 
 export type DensityPoint = {
@@ -152,14 +168,36 @@ export function normalizeBulan(value: string) {
 export function normalizeDashboardKategori(
   value: string | null | undefined,
 ): DashboardKategori {
-  const current = String(value ?? "").trim();
+  const current = String(value ?? "")
+    .trim()
+    .toLowerCase();
 
-  if (current === "Hiburan" || current === "Hiburan & Kesenian") {
+  if (current.includes("parkir") || current.includes("parking")) {
+    return "Jasa Parkir";
+  }
+
+  if (
+    current.includes("hiburan") ||
+    current.includes("kesenian") ||
+    current.includes("seni") ||
+    current.includes("entertainment")
+  ) {
     return "Hiburan & Kesenian";
   }
 
-  if (current === "Hotel") {
+  if (current.includes("hotel") || current.includes("penginapan")) {
     return "Hotel";
+  }
+
+  if (
+    current.includes("restaurant") ||
+    current.includes("restoran") ||
+    current.includes("rumah makan") ||
+    current.includes("cafe") ||
+    current.includes("kafe") ||
+    current.includes("resto")
+  ) {
+    return "Restaurant";
   }
 
   return "Restaurant";
@@ -168,23 +206,38 @@ export function normalizeDashboardKategori(
 export function normalizeFormKategori(
   value: string | null | undefined,
 ): FormKategori {
-  const current = normalizeDashboardKategori(value);
-
-  if (current === "Hiburan & Kesenian") {
-    return "Hiburan";
-  }
-
-  return current;
+  return normalizeDashboardKategori(value);
 }
 
 export function normalizeJenisPOS(value: string | null | undefined): JenisPOS {
-  return String(value ?? "").trim() === "T-107" ? "T-107" : "Tab";
+  const current = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (current.includes("t-107") || current.includes("t107")) {
+    return "T-107";
+  }
+
+  return "Advan Tab VX Neo";
 }
 
 export function normalizeStatusUsaha(
   value: string | null | undefined,
 ): StatusUsaha {
-  return String(value ?? "").trim() === "Nonaktif" ? "Nonaktif" : "Aktif";
+  const current = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    current.includes("non") ||
+    current.includes("tidak") ||
+    current.includes("inactive") ||
+    current === "false"
+  ) {
+    return "Nonaktif";
+  }
+
+  return "Aktif";
 }
 
 export function normalizeNpwpd(value: string | number | null | undefined) {
@@ -199,6 +252,7 @@ export function createEmptyDashboardOverview(): DashboardOverviewResponse {
       totalRestaurant: 0,
       totalHotel: 0,
       totalHiburan: 0,
+      totalJasaParkir: 0,
       totalSemua: 0,
     },
     revenueByMonth: [],
@@ -217,6 +271,7 @@ export function createEmptyWajibPajakListResponse(
       hotel: 0,
       restaurant: 0,
       hiburan: 0,
+      jasaParkir: 0,
     },
     pagination: {
       page,
@@ -240,11 +295,17 @@ export function createEmptyWajibPajakDetail(
     telp: "",
     status: "Aktif",
     tanggalAktivasi: "",
-    jenisPOS: "Tab",
+    jenisPOS: "Advan Tab VX Neo",
+    jenisPos: "Advan Tab VX Neo",
     jamBuka: "",
     jamTutup: "",
     lat: 4.6276,
     lng: 96.8577,
+    latitude: 4.6276,
+    longitude: 96.8577,
+    businessTypeId: "",
+    posTypeId: "",
+    citiesId: "",
   };
 }
 

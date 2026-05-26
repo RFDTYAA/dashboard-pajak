@@ -1,0 +1,82 @@
+{
+  "hash": "0983e21e",
+  "configHash": "32192ac8",
+  "lockfileHash": "177f3601",
+  "browserHash": "595d501e",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "5f9f2c00",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "76f691f3",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "a1da786e",
+      "needsInterop": true
+    },
+    "react-router-dom": {
+      "src": "../../node_modules/react-router-dom/dist/index.mjs",
+      "file": "react-router-dom.js",
+      "fileHash": "5cadc775",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "936209ee",
+      "needsInterop": false
+    },
+    "leaflet": {
+      "src": "../../node_modules/leaflet/dist/leaflet-src.js",
+      "file": "leaflet.js",
+      "fileHash": "e521eb1e",
+      "needsInterop": true
+    },
+    "@heroui/react": {
+      "src": "../../node_modules/@heroui/react/dist/index.mjs",
+      "file": "@heroui_react.js",
+      "fileHash": "6ccf623f",
+      "needsInterop": false
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "eff7cc90",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "es-7RAL322I": {
+      "file": "es-7RAL322I.js"
+    },
+    "dist-2IH7EQPZ": {
+      "file": "dist-2IH7EQPZ.js"
+    },
+    "src-UW24ZMRV-UZRSUZNT": {
+      "file": "src-UW24ZMRV-UZRSUZNT.js"
+    },
+    "chunk-XWHSUD33": {
+      "file": "chunk-XWHSUD33.js"
+    },
+    "chunk-VP2POZB3": {
+      "file": "chunk-VP2POZB3.js"
+    },
+    "chunk-AU2MKR2E": {
+      "file": "chunk-AU2MKR2E.js"
+    },
+    "chunk-VX2H6PUQ": {
+      "file": "chunk-VX2H6PUQ.js"
+    },
+    "chunk-G3PMV62Z": {
+      "file": "chunk-G3PMV62Z.js"
+    }
+  }
+}

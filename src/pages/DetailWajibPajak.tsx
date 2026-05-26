@@ -78,19 +78,61 @@ const BRAND = {
   subtitle: "Kabupaten Aceh Tengah",
 };
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+function getKategoriTone(value: string) {
+  const current = value.toLowerCase();
+
+  if (current.includes("hotel")) return "orange";
+  if (current.includes("parkir")) return "purple";
+  if (current.includes("hiburan") || current.includes("kesenian")) {
+    return "green";
+  }
+
+  return "blue";
+}
+
 function Badge({
   children,
   tone = "blue",
 }: {
   children: React.ReactNode;
-  tone?: "blue" | "slate" | "green";
+  tone?: "blue" | "slate" | "green" | "orange" | "purple";
 }) {
   const style =
-    tone === "blue"
-      ? { bg: "#EFF6FF", fg: "#3B82F6", border: "rgba(59,130,246,0.20)" }
+    tone === "orange"
+      ? {
+          bg: "#FEF3C7",
+          fg: "#B45309",
+          border: "rgba(245,158,11,0.25)",
+        }
       : tone === "green"
-        ? { bg: "#ECFDF5", fg: "#059669", border: "rgba(5,150,105,0.18)" }
-        : { bg: "#F1F5F9", fg: "#334155", border: "rgba(51,65,85,0.12)" };
+        ? {
+            bg: "#DCFCE7",
+            fg: "#047857",
+            border: "rgba(16,185,129,0.22)",
+          }
+        : tone === "purple"
+          ? {
+              bg: "#F3E8FF",
+              fg: "#7E22CE",
+              border: "rgba(147,51,234,0.22)",
+            }
+          : tone === "slate"
+            ? {
+                bg: "#F1F5F9",
+                fg: "#334155",
+                border: "rgba(51,65,85,0.12)",
+              }
+            : {
+                bg: "#DBEAFE",
+                fg: "#1D4ED8",
+                border: "rgba(59,130,246,0.20)",
+              };
 
   return (
     <span
@@ -99,7 +141,7 @@ function Badge({
         backgroundColor: style.bg,
         color: style.fg,
         border: `1px solid ${style.border}`,
-        fontWeight: 500,
+        fontWeight: 600,
       }}
     >
       {children}
@@ -139,15 +181,29 @@ function InfoRow({
   );
 }
 
+function toNumber(value: unknown, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return fallback;
+}
+
 export default function DetailWajibPajak() {
   const navigate = useNavigate();
   const params = useParams();
-  const rawId = Number(params.id ?? "1");
-  const safeId = Number.isFinite(rawId) && rawId > 0 ? rawId : 1;
+
+  const safeId = String(params.id ?? "").trim();
+  const validId = isUuid(safeId);
 
   const [data, setData] = useState<WajibPajakDetailData>(() =>
-    createEmptyWajibPajakDetail(safeId),
+    createEmptyWajibPajakDetail(safeId || "0"),
   );
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMapLike | null>(null);
@@ -156,16 +212,39 @@ export default function DetailWajibPajak() {
     const controller = new AbortController();
     let alive = true;
 
-    const run = async () => {
-      try {
-        const detail = await getWajibPajakDetail(safeId, controller.signal);
-        if (!alive) return;
-        setData(detail);
-      } catch {
-        if (!alive || controller.signal.aborted) return;
-        setData(createEmptyWajibPajakDetail(safeId));
+    async function run() {
+      if (!validId) {
+        setErrorMessage(
+          "ID wajib pajak tidak valid. Buka detail dari halaman Daftar Wajib Pajak.",
+        );
+        setLoading(false);
+        return;
       }
-    };
+
+      try {
+        setLoading(true);
+        setErrorMessage("");
+
+        const detail = await getWajibPajakDetail(safeId, controller.signal);
+
+        if (!alive) return;
+
+        setData(detail);
+      } catch (error) {
+        if (!alive || controller.signal.aborted) return;
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Gagal memuat detail wajib pajak.",
+        );
+        setData(createEmptyWajibPajakDetail(safeId));
+      } finally {
+        if (alive && !controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
 
     void run();
 
@@ -173,31 +252,20 @@ export default function DetailWajibPajak() {
       alive = false;
       controller.abort();
     };
-  }, [safeId]);
+  }, [safeId, validId]);
 
   const detailView = useMemo(() => {
-    const lat =
-      typeof data.latitude === "number"
-        ? data.latitude
-        : typeof data.lat === "number"
-          ? data.lat
-          : 4.6276;
-
-    const lng =
-      typeof data.longitude === "number"
-        ? data.longitude
-        : typeof data.lng === "number"
-          ? data.lng
-          : 96.8577;
+    const lat = toNumber(data.latitude ?? data.lat, 4.6276);
+    const lng = toNumber(data.longitude ?? data.lng, 96.8577);
 
     return {
       id: data.id,
       npwpd: normalizeNpwpd(data.npwpd),
       tipeUsaha: normalizeFormKategori(data.tipeUsaha) as TipeUsaha,
-      namaUsaha: data.namaUsaha,
-      alamat: data.alamat,
-      email: data.email,
-      telp: data.telp,
+      namaUsaha: data.namaUsaha || "-",
+      alamat: data.alamat || "-",
+      email: data.email || "-",
+      telp: data.telp || "-",
       status: normalizeStatusUsaha(data.status) as StatusUsaha,
       tanggalAktivasi: data.tanggalAktivasi || "-",
       jenisPOS: normalizeJenisPOS(data.jenisPOS ?? data.jenisPos) as JenisPOS,
@@ -211,7 +279,7 @@ export default function DetailWajibPajak() {
   useEffect(() => {
     let alive = true;
 
-    const run = async () => {
+    async function setupMap() {
       if (!mapDivRef.current) return;
 
       const mod = (await import("leaflet")) as unknown as { default: unknown };
@@ -226,7 +294,7 @@ export default function DetailWajibPajak() {
 
       const map = L.map(mapDivRef.current, {
         center: [detailView.lat, detailView.lng],
-        zoom: 12,
+        zoom: 15,
         zoomControl: true,
         scrollWheelZoom: true,
       });
@@ -252,17 +320,16 @@ export default function DetailWajibPajak() {
         .addTo(map)
         .bindPopup(
           `<div style="font-family: ui-sans-serif, system-ui; font-size: 13px; line-height: 1.35;">
-            <div style="font-weight: 600; margin-bottom: 4px;">${detailView.namaUsaha}</div>
+            <div style="font-weight: 700; margin-bottom: 4px;">${detailView.namaUsaha}</div>
             <div style="color: #64748B;">${detailView.alamat}</div>
-            <div style="color: #94A3B8; margin-top: 4px;">Aceh Tengah</div>
           </div>`,
         )
         .openPopup();
 
       mapRef.current = map;
-    };
+    }
 
-    void run();
+    void setupMap();
 
     return () => {
       alive = false;
@@ -271,7 +338,7 @@ export default function DetailWajibPajak() {
         mapRef.current = null;
       }
     };
-  }, [detailView.alamat, detailView.lat, detailView.lng, detailView.namaUsaha]);
+  }, [detailView.lat, detailView.lng, detailView.namaUsaha, detailView.alamat]);
 
   return (
     <div
@@ -317,10 +384,7 @@ export default function DetailWajibPajak() {
                 >
                   {BRAND.title}
                 </div>
-                <div
-                  className="text-white/80 text-sm mt-1"
-                  style={{ fontWeight: 400 }}
-                >
+                <div className="text-white/80 text-sm mt-1">
                   {BRAND.subtitle}
                 </div>
               </div>
@@ -329,10 +393,11 @@ export default function DetailWajibPajak() {
 
           <button
             type="button"
+            disabled={!validId}
             onClick={() => navigate(`/wajib-pajak/${safeId}/edit`)}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white text-slate-600 hover:bg-slate-50 transition shrink-0 text-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white text-slate-600 hover:bg-slate-50 transition shrink-0 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              fontWeight: 400,
+              fontWeight: 500,
               border: `1px solid rgba(255,255,255,0.14)`,
             }}
           >
@@ -351,6 +416,34 @@ export default function DetailWajibPajak() {
             boxShadow: "0 10px 24px rgba(15, 23, 42, 0.04)",
           }}
         >
+          {errorMessage && (
+            <div
+              className="mb-4 rounded-xl px-4 py-3 text-sm"
+              style={{
+                backgroundColor: "#FEF2F2",
+                color: "#B91C1C",
+                border: "1px solid #FECACA",
+                fontWeight: 600,
+              }}
+            >
+              {errorMessage}
+            </div>
+          )}
+
+          {loading && !errorMessage && (
+            <div
+              className="mb-4 rounded-xl px-4 py-3 text-sm"
+              style={{
+                backgroundColor: "#EFF6FF",
+                color: "#1D4ED8",
+                border: "1px solid #BFDBFE",
+                fontWeight: 600,
+              }}
+            >
+              Memuat detail wajib pajak...
+            </div>
+          )}
+
           <div className="grid grid-cols-12 gap-5 h-full">
             <section className="col-span-12 lg:col-span-5">
               <div className="flex items-center gap-2 mb-4">
@@ -366,7 +459,11 @@ export default function DetailWajibPajak() {
               <InfoRow label="NPWPD (16 digit)" value={detailView.npwpd} />
               <InfoRow
                 label="Kategori Usaha"
-                valueNode={<Badge tone="blue">{detailView.tipeUsaha}</Badge>}
+                valueNode={
+                  <Badge tone={getKategoriTone(detailView.tipeUsaha)}>
+                    {detailView.tipeUsaha}
+                  </Badge>
+                }
               />
               <InfoRow label="Nama Usaha" value={detailView.namaUsaha} />
               <InfoRow label="No. Telp" value={detailView.telp} />
@@ -417,43 +514,21 @@ export default function DetailWajibPajak() {
                 />
               </div>
 
-              <div className="mt-3 space-y-3">
-                <div>
-                  <div
-                    className="text-sm mb-1"
-                    style={{ color: THEME.muted, fontWeight: 400 }}
-                  >
-                    Alamat Lengkap
-                  </div>
-                  <div
-                    className="text-sm"
-                    style={{ color: THEME.text, fontWeight: 500 }}
-                  >
-                    {detailView.alamat}
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    className="text-sm mb-1"
-                    style={{ color: THEME.muted, fontWeight: 400 }}
-                  >
-                    Koordinat
-                  </div>
-                  <div
-                    className="text-sm"
-                    style={{ color: THEME.text, fontWeight: 500 }}
-                  >
-                    {detailView.lat}, {detailView.lng}
-                  </div>
-                </div>
+              <div className="mt-4">
+                <InfoRow label="Alamat" value={detailView.alamat} />
+                <InfoRow label="Latitude" value={String(detailView.lat)} />
+                <InfoRow
+                  label="Longitude"
+                  value={String(detailView.lng)}
+                  noBorder
+                />
               </div>
             </section>
           </div>
         </div>
 
         <div
-          className="pt-4 text-center text-xs"
+          className="pt-6 pb-3 text-center text-xs"
           style={{ color: THEME.muted }}
         >
           © {new Date().getFullYear()} {BRAND.subtitle} • PT. Biner Teknologi

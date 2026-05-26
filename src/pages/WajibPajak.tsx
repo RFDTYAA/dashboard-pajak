@@ -21,13 +21,11 @@ import {
   Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { downloadBlob } from "../lib/api";
+import { deleteWajibPajak, getWajibPajakList } from "../services/wajibPajak";
 import {
-  deleteWajibPajak,
-  downloadWajibPajakCsv,
-  downloadWajibPajakDeviceInfo,
-  getWajibPajakList,
-} from "../services/wajibPajak";
+  downloadPerangkatWajibPajakPdf,
+  downloadWajibPajakPdf,
+} from "../utils/wajibPajakPdf";
 import {
   createEmptyWajibPajakListResponse,
   normalizeDashboardKategori,
@@ -36,9 +34,9 @@ import {
 } from "../types/domain";
 import type {
   DashboardKategori as Kategori,
+  JenisPOS,
   KategoriFilter,
   WajibPajakListResponse,
-  JenisPOS,
 } from "../types/domain";
 
 type WajibPajakRow = {
@@ -69,20 +67,26 @@ const PAGE_SIZE = 10;
 function tipeChipStyle(k: Kategori) {
   if (k === "Restaurant") return { bg: "#DBEAFE", fg: "#1D4ED8" };
   if (k === "Hotel") return { bg: "#FEF3C7", fg: "#B45309" };
-  return { bg: "#DCFCE7", fg: "#047857" };
-}
+  if (k === "Hiburan & Kesenian") return { bg: "#DCFCE7", fg: "#047857" };
+  if (k === "Jasa Parkir") return { bg: "#F3E8FF", fg: "#7E22CE" };
 
-function posChipStyle(pos: JenisPOS) {
-  if (pos === "Tab") return { bg: "#E0F2FE", fg: "#0369A1" };
   return { bg: "#F1F5F9", fg: "#0F172A" };
 }
 
-function statStyle(kind: "total" | "hotel" | "restaurant" | "hiburan") {
+function posChipStyle(pos: JenisPOS) {
+  if (pos === "Advan Tab VX Neo") return { bg: "#E0F2FE", fg: "#0369A1" };
+  return { bg: "#F1F5F9", fg: "#0F172A" };
+}
+
+function statStyle(
+  kind: "total" | "hotel" | "restaurant" | "hiburan" | "parkir",
+) {
   if (kind === "total") {
     return {
       label: "Total Wajib Pajak",
       icon: "👥",
       iconBg: "#DBEAFE",
+      iconColor: "#1D4ED8",
       barBg: "#DBEAFE",
       barFg: "#334155",
     };
@@ -92,29 +96,104 @@ function statStyle(kind: "total" | "hotel" | "restaurant" | "hiburan") {
     return {
       label: "Kategori Hotel",
       icon: "🏨",
-      iconBg: "#E0E7FF",
-      barBg: "#E0E7FF",
+      iconBg: "#FEF3C7",
+      iconColor: "#B45309",
+      barBg: "#FEF3C7",
       barFg: "#F59E0B",
     };
   }
 
   if (kind === "restaurant") {
     return {
-      label: "Kategori Restoran",
+      label: "Kategori Restaurant",
       icon: "🍽️",
       iconBg: "#DBEAFE",
+      iconColor: "#1D4ED8",
       barBg: "#DBEAFE",
       barFg: "#3B82F6",
     };
   }
 
+  if (kind === "parkir") {
+    return {
+      label: "Kategori Jasa Parkir",
+      icon: "🅿️",
+      iconBg: "#F3E8FF",
+      iconColor: "#7E22CE",
+      barBg: "#F3E8FF",
+      barFg: "#9333EA",
+    };
+  }
+
   return {
-    label: "Kategori Hiburan",
+    label: "Kategori Hiburan & Kesenian",
     icon: "🎭",
     iconBg: "#DCFCE7",
+    iconColor: "#047857",
     barBg: "#DCFCE7",
     barFg: "#10B981",
   };
+}
+
+function SummaryCard({
+  label,
+  value,
+  icon,
+  iconBg,
+  iconColor,
+  barBg,
+  barFg,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  iconBg: string;
+  iconColor: string;
+  barBg: string;
+  barFg: string;
+}) {
+  return (
+    <Card className="h-full border-none shadow-md shadow-slate-200/60 rounded-2xl bg-white">
+      <CardBody className="h-full p-5 flex flex-col justify-between">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-slate-500 text-[11px] uppercase tracking-wide font-extrabold leading-snug"
+              style={{ minHeight: 36 }}
+            >
+              {label}
+            </p>
+
+            <p className="text-slate-900 text-2xl font-extrabold leading-none mt-2">
+              {value}
+            </p>
+          </div>
+
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: iconBg }}
+          >
+            <span style={{ color: iconColor }} className="text-lg">
+              {icon}
+            </span>
+          </div>
+        </div>
+
+        <div
+          className="mt-5 h-1.5 rounded-full"
+          style={{ backgroundColor: barBg }}
+        >
+          <div
+            className="h-1.5 rounded-full"
+            style={{
+              width: "100%",
+              backgroundColor: barFg,
+            }}
+          />
+        </div>
+      </CardBody>
+    </Card>
+  );
 }
 
 function clamp(n: number, a: number, b: number) {
@@ -150,8 +229,8 @@ export default function WajibPajak() {
   const [response, setResponse] = useState<WajibPajakListResponse>(() =>
     createEmptyWajibPajakListResponse(1, PAGE_SIZE),
   );
-  const [reloadKey, setReloadKey] = useState(0);
 
+  const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState("");
   const [kategori, setKategori] = useState<KategoriFilter>("Semua");
   const [page, setPage] = useState(1);
@@ -196,12 +275,7 @@ export default function WajibPajak() {
         );
 
         if (!alive) return;
-
         setResponse(result);
-
-        if (result.pagination.page !== page) {
-          setPage(result.pagination.page);
-        }
       } catch {
         if (!alive || controller.signal.aborted) return;
         setResponse(createEmptyWajibPajakListResponse(page, pageSize));
@@ -226,7 +300,19 @@ export default function WajibPajak() {
     }));
   }, [response.items]);
 
-  const counts = response.summary;
+  const counts = useMemo(() => {
+    const rows = response.items.map((item) =>
+      normalizeDashboardKategori(item.tipeUsaha),
+    );
+
+    return {
+      total: response.summary.total,
+      hotel: rows.filter((item) => item === "Hotel").length,
+      restaurant: rows.filter((item) => item === "Restaurant").length,
+      hiburan: rows.filter((item) => item === "Hiburan & Kesenian").length,
+      parkir: rows.filter((item) => item === "Jasa Parkir").length,
+    };
+  }, [response.items, response.summary.total]);
 
   const totalItems = response.pagination.totalItems;
   const totalPages = Math.max(
@@ -248,43 +334,45 @@ export default function WajibPajak() {
     "Hotel",
     "Restaurant",
     "Hiburan & Kesenian",
+    "Jasa Parkir",
   ];
 
-  const handleDownloadDeviceInfo = async () => {
+  async function getAllRowsForPdf() {
+    const result = await getWajibPajakList({
+      search: q.trim(),
+      kategori,
+      page: 1,
+      pageSize: 1000,
+    });
+
+    return result.items;
+  }
+
+  async function handleDownloadDeviceInfo() {
     try {
-      const result = await downloadWajibPajakDeviceInfo();
-      downloadBlob(
-        result.blob,
-        result.fileName ?? "informasi-data-perangkat.txt",
-      );
+      const rows = await getAllRowsForPdf();
+      downloadPerangkatWajibPajakPdf(rows);
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
-          : "Gagal mengunduh data perangkat.",
+          : "Gagal mengunduh PDF informasi perangkat.",
       );
     }
-  };
+  }
 
-  const handleDownloadWajibPajak = async () => {
+  async function handleDownloadWajibPajak() {
     try {
-      const result = await downloadWajibPajakCsv({
-        search: q.trim(),
-        kategori,
-      });
-
-      downloadBlob(
-        result.blob,
-        result.fileName ?? "informasi-data-wajib-pajak.csv",
-      );
+      const rows = await getAllRowsForPdf();
+      downloadWajibPajakPdf(rows);
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
-          : "Gagal mengunduh data wajib pajak.",
+          : "Gagal mengunduh PDF daftar wajib pajak.",
       );
     }
-  };
+  }
 
   return (
     <div
@@ -320,171 +408,32 @@ export default function WajibPajak() {
             >
               {BRAND.title}
             </div>
-            <div
-              className="text-white/80 text-sm mt-1"
-              style={{ fontWeight: 400 }}
-            >
-              {BRAND.subtitle}
-            </div>
+            <div className="text-white/80 text-sm mt-1">{BRAND.subtitle}</div>
           </div>
         </div>
       </header>
 
       <div className="flex-1 px-4 md:px-6 py-4 flex flex-col gap-4">
-        <div className="grid grid-cols-12 gap-4">
-          <Card className="col-span-12 sm:col-span-6 xl:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-2xl">
-            <CardBody className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div
-                    className="text-[11px] uppercase tracking-wide"
-                    style={{ color: THEME.muted, fontWeight: 700 }}
-                  >
-                    {statStyle("total").label}
-                  </div>
-                  <div className="text-2xl mt-2" style={{ fontWeight: 800 }}>
-                    {counts.total}
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
+          {(["total", "hotel", "restaurant", "hiburan", "parkir"] as const).map(
+            (kind) => {
+              const style = statStyle(kind);
+              const value = counts[kind];
 
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: statStyle("total").iconBg }}
-                >
-                  <span className="text-lg">{statStyle("total").icon}</span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1.5 rounded-full"
-                style={{ backgroundColor: statStyle("total").barBg }}
-              >
-                <div
-                  className="h-1.5 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: statStyle("total").barFg,
-                  }}
+              return (
+                <SummaryCard
+                  key={kind}
+                  label={style.label}
+                  value={value}
+                  icon={style.icon}
+                  iconBg={style.iconBg}
+                  iconColor={style.iconColor}
+                  barBg={style.barBg}
+                  barFg={style.barFg}
                 />
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 sm:col-span-6 xl:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-2xl">
-            <CardBody className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div
-                    className="text-[11px] uppercase tracking-wide"
-                    style={{ color: THEME.muted, fontWeight: 700 }}
-                  >
-                    {statStyle("hotel").label}
-                  </div>
-                  <div className="text-2xl mt-2" style={{ fontWeight: 800 }}>
-                    {counts.hotel}
-                  </div>
-                </div>
-
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: statStyle("hotel").iconBg }}
-                >
-                  <span className="text-lg">{statStyle("hotel").icon}</span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1.5 rounded-full"
-                style={{ backgroundColor: statStyle("hotel").barBg }}
-              >
-                <div
-                  className="h-1.5 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: statStyle("hotel").barFg,
-                  }}
-                />
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 sm:col-span-6 xl:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-2xl">
-            <CardBody className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div
-                    className="text-[11px] uppercase tracking-wide"
-                    style={{ color: THEME.muted, fontWeight: 700 }}
-                  >
-                    {statStyle("restaurant").label}
-                  </div>
-                  <div className="text-2xl mt-2" style={{ fontWeight: 800 }}>
-                    {counts.restaurant}
-                  </div>
-                </div>
-
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: statStyle("restaurant").iconBg }}
-                >
-                  <span className="text-lg">
-                    {statStyle("restaurant").icon}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1.5 rounded-full"
-                style={{ backgroundColor: statStyle("restaurant").barBg }}
-              >
-                <div
-                  className="h-1.5 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: statStyle("restaurant").barFg,
-                  }}
-                />
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 sm:col-span-6 xl:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-2xl">
-            <CardBody className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div
-                    className="text-[11px] uppercase tracking-wide"
-                    style={{ color: THEME.muted, fontWeight: 700 }}
-                  >
-                    {statStyle("hiburan").label}
-                  </div>
-                  <div className="text-2xl mt-2" style={{ fontWeight: 800 }}>
-                    {counts.hiburan}
-                  </div>
-                </div>
-
-                <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: statStyle("hiburan").iconBg }}
-                >
-                  <span className="text-lg">{statStyle("hiburan").icon}</span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1.5 rounded-full"
-                style={{ backgroundColor: statStyle("hiburan").barBg }}
-              >
-                <div
-                  className="h-1.5 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: statStyle("hiburan").barFg,
-                  }}
-                />
-              </div>
-            </CardBody>
-          </Card>
+              );
+            },
+          )}
         </div>
 
         <div
@@ -505,12 +454,11 @@ export default function WajibPajak() {
                       setQ(e.target.value);
                       setPage(1);
                     }}
-                    placeholder="Cari NPWD, Nama Usaha, Tipe Usaha..."
+                    placeholder="Cari NPWPD, Nama Usaha, Tipe Usaha..."
                     className="w-full bg-slate-50 rounded-xl pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                     style={{
                       border: `1px solid ${THEME.border}`,
                       color: THEME.text,
-                      fontWeight: 400,
                     }}
                   />
                 </div>
@@ -525,7 +473,6 @@ export default function WajibPajak() {
                     style={{
                       borderColor: THEME.border,
                       color: THEME.text,
-                      fontWeight: 400,
                     }}
                   >
                     <span className="truncate">
@@ -553,6 +500,7 @@ export default function WajibPajak() {
                     >
                       {kategoriOptions.map((item, index) => {
                         const selected = item === kategori;
+
                         return (
                           <button
                             key={item}
@@ -565,7 +513,7 @@ export default function WajibPajak() {
                             className="w-full text-left px-4 py-3 text-sm hover:bg-slate-50 transition"
                             style={{
                               color: selected ? THEME.accent : THEME.text,
-                              fontWeight: selected ? 500 : 400,
+                              fontWeight: selected ? 600 : 400,
                               backgroundColor: selected
                                 ? "rgba(30,99,214,0.06)"
                                 : "#FFFFFF",
@@ -593,7 +541,6 @@ export default function WajibPajak() {
                     style={{
                       borderColor: THEME.border,
                       color: THEME.text,
-                      fontWeight: 400,
                       minWidth: 140,
                     }}
                   >
@@ -629,7 +576,6 @@ export default function WajibPajak() {
                           setOpenUnduh(false);
                         }}
                         className="w-full text-left px-4 py-3.5 hover:bg-slate-50 transition"
-                        style={{ color: THEME.text, fontWeight: 400 }}
                       >
                         <div className="flex items-start gap-3">
                           <div
@@ -641,18 +587,12 @@ export default function WajibPajak() {
                               style={{ color: "#4F46E5" }}
                             />
                           </div>
-                          <div className="min-w-0">
-                            <div
-                              className="text-sm"
-                              style={{ fontWeight: 500 }}
-                            >
+                          <div>
+                            <div className="text-sm font-semibold">
                               Informasi Data Perangkat
                             </div>
-                            <div
-                              className="text-xs mt-1"
-                              style={{ color: THEME.muted, fontWeight: 400 }}
-                            >
-                              Data perangkat yang terhubung
+                            <div className="text-xs mt-1 text-slate-500">
+                              Unduh laporan perangkat PDF
                             </div>
                           </div>
                         </div>
@@ -669,7 +609,6 @@ export default function WajibPajak() {
                           setOpenUnduh(false);
                         }}
                         className="w-full text-left px-4 py-3.5 hover:bg-slate-50 transition"
-                        style={{ color: THEME.text, fontWeight: 400 }}
                       >
                         <div className="flex items-start gap-3">
                           <div
@@ -681,18 +620,12 @@ export default function WajibPajak() {
                               style={{ color: "#1D4ED8" }}
                             />
                           </div>
-                          <div className="min-w-0">
-                            <div
-                              className="text-sm"
-                              style={{ fontWeight: 500 }}
-                            >
+                          <div>
+                            <div className="text-sm font-semibold">
                               Informasi Data Wajib Pajak
                             </div>
-                            <div
-                              className="text-xs mt-1"
-                              style={{ color: THEME.muted, fontWeight: 400 }}
-                            >
-                              Daftar data wajib pajak saat ini
+                            <div className="text-xs mt-1 text-slate-500">
+                              Unduh daftar wajib pajak PDF
                             </div>
                           </div>
                         </div>
@@ -709,7 +642,7 @@ export default function WajibPajak() {
                     color: "#FFFFFF",
                     border: "1px solid rgba(30,99,214,0.35)",
                     boxShadow: "0 12px 26px rgba(30,99,214,0.18)",
-                    fontWeight: 500,
+                    fontWeight: 600,
                   }}
                   onClick={() => navigate("/wajib-pajak/tambah")}
                 >
@@ -721,17 +654,7 @@ export default function WajibPajak() {
           </div>
 
           <div className="w-full overflow-x-auto">
-            <Table
-              aria-label="Daftar Wajib Pajak"
-              removeWrapper
-              className={[
-                "min-w-full",
-                "**:data-[slot=thead]:sticky",
-                "**:data-[slot=thead]:top-0",
-                "**:data-[slot=thead]:z-10",
-                "**:data-[slot=thead]:bg-white",
-              ].join(" ")}
-            >
+            <Table aria-label="Daftar Wajib Pajak" removeWrapper>
               <TableHeader>
                 <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center w-16">
                   No
@@ -778,30 +701,17 @@ export default function WajibPajak() {
                         className="border-b border-slate-50 last:border-none hover:bg-slate-50 transition-colors"
                       >
                         <TableCell className="text-center px-4 py-4">
-                          <span
-                            className="text-slate-700 text-sm"
-                            style={{ fontWeight: 700 }}
-                          >
-                            {(safePage - 1) * pageSize + idx + 1}
-                          </span>
+                          {(safePage - 1) * pageSize + idx + 1}
                         </TableCell>
 
                         <TableCell className="text-center px-4 py-4">
-                          <span
-                            className="text-slate-700 tracking-wider"
-                            style={{ fontWeight: 600 }}
-                          >
+                          <span className="font-semibold tracking-wider">
                             {r.npwpd}
                           </span>
                         </TableCell>
 
                         <TableCell className="text-left px-4 py-4">
-                          <span
-                            className="text-slate-800 text-sm"
-                            style={{ fontWeight: 600 }}
-                          >
-                            {r.namaUsaha}
-                          </span>
+                          <span className="font-semibold">{r.namaUsaha}</span>
                         </TableCell>
 
                         <TableCell className="text-center px-4 py-4">
@@ -837,6 +747,7 @@ export default function WajibPajak() {
                         <TableCell className="text-center px-4 py-4">
                           <div className="flex items-center justify-center gap-4">
                             <button
+                              type="button"
                               className="w-9 h-9 rounded-xl flex items-center justify-center border hover:bg-slate-50 transition"
                               style={{ borderColor: THEME.border }}
                               title="Lihat"
@@ -849,6 +760,7 @@ export default function WajibPajak() {
                             </button>
 
                             <button
+                              type="button"
                               className="w-9 h-9 rounded-xl flex items-center justify-center border hover:bg-rose-50 transition"
                               style={{ borderColor: THEME.border }}
                               title="Hapus"
@@ -886,36 +798,20 @@ export default function WajibPajak() {
           </div>
 
           <div className="px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div
-              className="text-sm"
-              style={{ color: THEME.muted, fontWeight: 400 }}
-            >
-              Menampilkan{" "}
-              <span style={{ color: THEME.text, fontWeight: 600 }}>
-                {showingStart}
-              </span>
+            <div className="text-sm" style={{ color: THEME.muted }}>
+              Menampilkan <b style={{ color: THEME.text }}>{showingStart}</b>
               {" - "}
-              <span style={{ color: THEME.text, fontWeight: 600 }}>
-                {showingEnd}
-              </span>{" "}
-              dari{" "}
-              <span style={{ color: THEME.text, fontWeight: 600 }}>
-                {totalItems}
-              </span>{" "}
-              data
+              <b style={{ color: THEME.text }}>{showingEnd}</b> dari{" "}
+              <b style={{ color: THEME.text }}>{totalItems}</b> data
             </div>
 
             <div className="flex items-center gap-2 justify-end">
               <button
+                type="button"
                 className="w-10 h-10 rounded-xl border bg-white hover:bg-slate-50 transition"
-                style={{
-                  borderColor: THEME.border,
-                  color: THEME.text,
-                  fontWeight: 600,
-                }}
+                style={{ borderColor: THEME.border }}
                 onClick={() => setPage((p) => clamp(p - 1, 1, totalPages))}
                 disabled={safePage <= 1}
-                title="Prev"
               >
                 {"<"}
               </button>
@@ -923,14 +819,10 @@ export default function WajibPajak() {
               {start > 1 && (
                 <>
                   <button
-                    className="w-10 h-10 rounded-xl border bg-white hover:bg-slate-50 transition"
-                    style={{
-                      borderColor: THEME.border,
-                      color: THEME.text,
-                      fontWeight: 600,
-                    }}
+                    type="button"
+                    className="w-10 h-10 rounded-xl border bg-white"
+                    style={{ borderColor: THEME.border }}
                     onClick={() => setPage(1)}
-                    title="Page 1"
                   >
                     1
                   </button>
@@ -940,8 +832,10 @@ export default function WajibPajak() {
 
               {pages.map((p) => {
                 const active = p === safePage;
+
                 return (
                   <button
+                    type="button"
                     key={p}
                     className="w-10 h-10 rounded-xl border transition"
                     style={{
@@ -951,7 +845,6 @@ export default function WajibPajak() {
                       fontWeight: 600,
                     }}
                     onClick={() => setPage(p)}
-                    title={`Page ${p}`}
                   >
                     {p}
                   </button>
@@ -962,14 +855,10 @@ export default function WajibPajak() {
                 <>
                   <span className="px-1 text-slate-400">…</span>
                   <button
-                    className="w-10 h-10 rounded-xl border bg-white hover:bg-slate-50 transition"
-                    style={{
-                      borderColor: THEME.border,
-                      color: THEME.text,
-                      fontWeight: 600,
-                    }}
+                    type="button"
+                    className="w-10 h-10 rounded-xl border bg-white"
+                    style={{ borderColor: THEME.border }}
                     onClick={() => setPage(totalPages)}
-                    title={`Page ${totalPages}`}
                   >
                     {totalPages}
                   </button>
@@ -977,15 +866,11 @@ export default function WajibPajak() {
               )}
 
               <button
+                type="button"
                 className="w-10 h-10 rounded-xl border bg-white hover:bg-slate-50 transition"
-                style={{
-                  borderColor: THEME.border,
-                  color: THEME.text,
-                  fontWeight: 600,
-                }}
+                style={{ borderColor: THEME.border }}
                 onClick={() => setPage((p) => clamp(p + 1, 1, totalPages))}
                 disabled={safePage >= totalPages}
-                title="Next"
               >
                 {">"}
               </button>
@@ -997,7 +882,7 @@ export default function WajibPajak() {
           className="pt-1 text-center text-xs"
           style={{ color: THEME.muted }}
         >
-          © {new Date().getFullYear()} {BRAND.subtitle} • PT. Biner Teknologi
+          ©️ {new Date().getFullYear()} {BRAND.subtitle} • PT. Biner Teknologi
           Indonesia
         </div>
       </div>

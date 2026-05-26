@@ -31,3 +31,5 @@ Thumbs.db
 
 # optional local overrides
 *.local
+
+# .vite/  

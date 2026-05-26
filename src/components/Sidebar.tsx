@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
 } from "lucide-react";
+import { clearAuthSession } from "../lib/api";
 
 type Props = {
   collapsed: boolean;
@@ -14,9 +15,9 @@ type Props = {
 };
 
 const NAV = [
-  { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
+  { label: "Beranda", to: "/dashboard", icon: LayoutDashboard },
   { label: "Daftar Wajib Pajak", to: "/wajib-pajak", icon: Users },
-  { label: "Laporan", to: "/laporan", icon: FileText },
+  { label: "Laporan Transaksi", to: "/laporan", icon: FileText },
   { label: "Pengaturan", to: "/pengaturan", icon: Settings },
 ];
 
@@ -25,12 +26,19 @@ function cn(...xs: Array<string | false | undefined | null>) {
 }
 
 export default function Sidebar({ collapsed, onToggle }: Props) {
+  const navigate = useNavigate();
+
   const border = "rgba(15, 23, 42, 0.10)";
   const muted = "#64748B";
   const text = "#0F172A";
   const accent = "#1E63D6";
 
   const width = collapsed ? 92 : 300;
+
+  const handleLogout = () => {
+    clearAuthSession();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <aside className="h-screen sticky top-0 left-0 shrink-0" style={{ width }}>
@@ -188,10 +196,7 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
               border: "1px solid rgba(30,99,214,0.35)",
               boxShadow: "0 12px 26px rgba(30,99,214,0.18)",
             }}
-            onClick={() => {
-              localStorage.removeItem("auth_pajak");
-              window.location.href = "/login";
-            }}
+            onClick={handleLogout}
             aria-label="Logout"
             title="Logout"
           >

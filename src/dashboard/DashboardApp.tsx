@@ -58,6 +58,7 @@ type ChartAll = {
   Restaurant: number;
   Hotel: number;
   "Hiburan & Kesenian": number;
+  "Jasa Parkir": number;
 };
 
 type ChartSingle = {
@@ -106,12 +107,18 @@ const DEFAULT_YEAR_OPTIONS = [
   String(new Date().getFullYear() - 2),
 ] as const;
 
-const KATEGORI_LIST: Kategori[] = ["Restaurant", "Hotel", "Hiburan & Kesenian"];
+const KATEGORI_LIST: Kategori[] = [
+  "Restaurant",
+  "Hotel",
+  "Hiburan & Kesenian",
+  "Jasa Parkir",
+];
 
 const kategoriColor: Record<Kategori, string> = {
   Restaurant: "#3B82F6",
   Hotel: "#F59E0B",
   "Hiburan & Kesenian": "#10B981",
+  "Jasa Parkir": "#9333EA",
 };
 
 const formatRupiah = (value: number) =>
@@ -133,11 +140,12 @@ const padNPWPD = (idLike: number | string | undefined) =>
 const kategoriChipStyle = (k: Kategori) => {
   if (k === "Restaurant") return { bg: "#DBEAFE", fg: "#1D4ED8" };
   if (k === "Hotel") return { bg: "#FEF3C7", fg: "#B45309" };
-  return { bg: "#DCFCE7", fg: "#047857" };
+  if (k === "Hiburan & Kesenian") return { bg: "#DCFCE7", fg: "#047857" };
+  return { bg: "#F3E8FF", fg: "#7E22CE" };
 };
 
 const posChipStyle = (pos: Exclude<JenisPOS, "Semua">) => {
-  if (pos === "Tab") return { bg: "#E0F2FE", fg: "#0369A1" };
+  if (pos === "Advan Tab VX Neo") return { bg: "#E0F2FE", fg: "#0369A1" };
   return { bg: "#F1F5F9", fg: "#0F172A" };
 };
 
@@ -247,7 +255,7 @@ function CustomSelect<T extends string>({
                   className="w-full text-left px-4 py-3 text-sm hover:bg-slate-50 transition"
                   style={{
                     color: selected ? THEME.accent : THEME.text,
-                    fontWeight: selected ? 500 : 400,
+                    fontWeight: selected ? 600 : 400,
                     backgroundColor: selected
                       ? "rgba(30,99,214,0.06)"
                       : "#FFFFFF",
@@ -265,6 +273,62 @@ function CustomSelect<T extends string>({
         )}
       </div>
     </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  icon,
+  iconBg,
+  iconColor,
+  barColor,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  iconBg: string;
+  iconColor: string;
+  barColor: string;
+}) {
+  return (
+    <Card className="h-full border-none shadow-md shadow-slate-200/60 rounded-2xl bg-white">
+      <CardBody className="h-full p-5 flex flex-col justify-between">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-slate-500 text-[11px] uppercase tracking-wide font-extrabold leading-snug"
+              style={{ minHeight: 44 }}
+            >
+              {label}
+            </p>
+
+            <p className="text-slate-900 text-2xl font-extrabold leading-none mt-2">
+              {formatRupiah(value)}
+            </p>
+          </div>
+
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: iconBg }}
+          >
+            <span style={{ color: iconColor }} className="text-lg">
+              {icon}
+            </span>
+          </div>
+        </div>
+
+        <div
+          className="mt-5 h-1.5 rounded-full"
+          style={{ backgroundColor: iconBg }}
+        >
+          <div
+            className="h-1.5 rounded-full"
+            style={{ width: "100%", backgroundColor: barColor }}
+          />
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -347,7 +411,13 @@ export default function DashboardApp() {
       const base = new Map<string, ChartAll>(
         BULAN_ORDER.map((b) => [
           b,
-          { bulan: b, Restaurant: 0, Hotel: 0, "Hiburan & Kesenian": 0 },
+          {
+            bulan: b,
+            Restaurant: 0,
+            Hotel: 0,
+            "Hiburan & Kesenian": 0,
+            "Jasa Parkir": 0,
+          },
         ]),
       );
 
@@ -376,7 +446,8 @@ export default function DashboardApp() {
     if (kategoriFilter === "Semua") {
       return (chartPendapatan as ChartAll[]).map((d) => ({
         bulan: d.bulan,
-        total: d.Restaurant + d.Hotel + d["Hiburan & Kesenian"],
+        total:
+          d.Restaurant + d.Hotel + d["Hiburan & Kesenian"] + d["Jasa Parkir"],
       }));
     }
 
@@ -419,6 +490,7 @@ export default function DashboardApp() {
   }, [filteredTop]);
 
   const periodeLabel = `${bulanFilter} ${tahunFilter}`;
+  const totalJasaParkir = ringkasanBulan.totalJasaParkir ?? 0;
 
   return (
     <div
@@ -454,12 +526,7 @@ export default function DashboardApp() {
             >
               {BRAND.title}
             </div>
-            <div
-              className="text-white/80 text-sm mt-1"
-              style={{ fontWeight: 400 }}
-            >
-              {BRAND.subtitle}
-            </div>
+            <div className="text-white/80 text-sm mt-1">{BRAND.subtitle}</div>
           </div>
         </div>
       </header>
@@ -482,22 +549,7 @@ export default function DashboardApp() {
                   border: `1px solid ${THEME.border}`,
                 }}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="w-5 h-5"
-                  style={{ color: THEME.muted }}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
+                📅
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1">
@@ -520,7 +572,7 @@ export default function DashboardApp() {
               <CustomSelect
                 label="Jenis POS"
                 value={jenisPOSFilter}
-                options={["Semua", "Tab", "T-107"]}
+                options={["Semua", "Advan Tab VX Neo", "T-107"]}
                 onChange={setJenisPOSFilter}
               />
             </div>
@@ -536,526 +588,397 @@ export default function DashboardApp() {
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-6">
-          <Card className="col-span-12 md:col-span-6 lg:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-slate-500 text-sm font-semibold h-10 flex items-end">
-                    Total Pajak Restaurant ({periodeLabel})
-                  </p>
-                  <p className="text-slate-900 text-2xl font-extrabold leading-none h-9 flex items-end">
-                    {formatRupiah(ringkasanBulan.totalRestaurant)}
-                  </p>
-                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
+          <SummaryCard
+            label={`Total Pajak Semua (${periodeLabel})`}
+            value={ringkasanBulan.totalSemua}
+            icon="📊"
+            iconBg="#E2E8F0"
+            iconColor="#0F172A"
+            barColor="#334155"
+          />
 
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: "#DBEAFE" }}
-                >
-                  <span style={{ color: "#1D4ED8" }} className="text-xl">
-                    🍽️
-                  </span>
-                </div>
-              </div>
+          <SummaryCard
+            label={`Total Pajak Restaurant (${periodeLabel})`}
+            value={ringkasanBulan.totalRestaurant}
+            icon="🍽️"
+            iconBg="#DBEAFE"
+            iconColor="#1D4ED8"
+            barColor={kategoriColor.Restaurant}
+          />
 
-              <div
-                className="mt-4 h-1 rounded-full"
-                style={{ backgroundColor: "#DBEAFE" }}
-              >
-                <div
-                  className="h-1 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: kategoriColor.Restaurant,
-                  }}
-                />
-              </div>
-            </CardBody>
-          </Card>
+          <SummaryCard
+            label={`Total Pajak Hotel (${periodeLabel})`}
+            value={ringkasanBulan.totalHotel}
+            icon="🏨"
+            iconBg="#FEF3C7"
+            iconColor="#B45309"
+            barColor={kategoriColor.Hotel}
+          />
 
-          <Card className="col-span-12 md:col-span-6 lg:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-slate-500 text-sm font-semibold h-10 flex items-end">
-                    Total Pajak Hotel ({periodeLabel})
-                  </p>
-                  <p className="text-slate-900 text-2xl font-extrabold leading-none h-9 flex items-end">
-                    {formatRupiah(ringkasanBulan.totalHotel)}
-                  </p>
-                </div>
+          <SummaryCard
+            label={`Total Pajak Hiburan (${periodeLabel})`}
+            value={ringkasanBulan.totalHiburan}
+            icon="🎭"
+            iconBg="#DCFCE7"
+            iconColor="#047857"
+            barColor={kategoriColor["Hiburan & Kesenian"]}
+          />
 
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: "#E0E7FF" }}
-                >
-                  <span style={{ color: "#1E3A8A" }} className="text-xl">
-                    🏨
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1 rounded-full"
-                style={{ backgroundColor: "#E0E7FF" }}
-              >
-                <div
-                  className="h-1 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: kategoriColor.Hotel,
-                  }}
-                />
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 md:col-span-6 lg:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-slate-500 text-sm font-semibold h-10 flex items-end">
-                    Total Pajak Hiburan & Kesenian ({periodeLabel})
-                  </p>
-                  <p className="text-slate-900 text-2xl font-extrabold leading-none h-9 flex items-end">
-                    {formatRupiah(ringkasanBulan.totalHiburan)}
-                  </p>
-                </div>
-
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: "#EEF2FF" }}
-                >
-                  <span style={{ color: "#1E3A8A" }} className="text-xl">
-                    🎭
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1 rounded-full"
-                style={{ backgroundColor: "#EEF2FF" }}
-              >
-                <div
-                  className="h-1 rounded-full"
-                  style={{
-                    width: "100%",
-                    backgroundColor: kategoriColor["Hiburan & Kesenian"],
-                  }}
-                />
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="col-span-12 md:col-span-6 lg:col-span-3 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-slate-500 text-sm font-semibold h-10 flex items-end">
-                    Total Pajak Semua ({periodeLabel})
-                  </p>
-                  <p className="text-slate-900 text-2xl font-extrabold leading-none h-9 flex items-end">
-                    {formatRupiah(ringkasanBulan.totalSemua)}
-                  </p>
-                </div>
-
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: "#E2E8F0" }}
-                >
-                  <span style={{ color: "#0F172A" }} className="text-xl">
-                    📊
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="mt-4 h-1 rounded-full"
-                style={{ backgroundColor: "#E2E8F0" }}
-              >
-                <div
-                  className="h-1 rounded-full"
-                  style={{ width: "100%", backgroundColor: "#334155" }}
-                />
-              </div>
-            </CardBody>
-          </Card>
+          <SummaryCard
+            label={`Total Pajak Jasa Parkir (${periodeLabel})`}
+            value={totalJasaParkir}
+            icon="🅿️"
+            iconBg="#F3E8FF"
+            iconColor="#7E22CE"
+            barColor={kategoriColor["Jasa Parkir"]}
+          />
         </div>
 
-        <div className="grid grid-cols-12 gap-8">
-          <Card className="col-span-12 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-8">
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800">
-                  Pendapatan Bulanan
-                </h3>
-                <p className="text-slate-400 text-xs">
-                  Total penerimaan per tahun ({tahunFilter})
-                </p>
-              </div>
+        <Card
+          className="border-none shadow-sm rounded-3xl bg-white"
+          style={{ border: `1px solid ${THEME.border}` }}
+        >
+          <CardBody className="p-6 md:p-8">
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-slate-800">
+                Pendapatan Bulanan
+              </h3>
+              <p className="text-slate-400 text-xs">
+                Total penerimaan per tahun ({tahunFilter})
+              </p>
+            </div>
 
-              <div className="h-97.5 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={chartPendapatan}
-                    margin={{ top: 16, right: 28, left: 8, bottom: 26 }}
-                    barCategoryGap="18%"
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#E8EEFF"
-                    />
-                    <XAxis
-                      dataKey="bulan"
-                      axisLine={false}
-                      tickLine={false}
-                      interval={0}
-                      angle={0}
-                      textAnchor="middle"
-                      height={64}
-                      tickMargin={16}
-                      padding={{ left: 16, right: 16 }}
-                      tick={{ fill: "#64748B", fontSize: 12, fontWeight: 600 }}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#94a3b8", fontSize: 12 }}
-                      tickFormatter={(val) => `Rp${val / 1000000}jt`}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "#F2F7FF" }}
-                      formatter={(value: unknown, name: unknown) => [
-                        formatRupiah(Number(value)),
-                        kategoriFilter === "Semua"
-                          ? String(name)
-                          : "Pendapatan",
-                      ]}
-                      contentStyle={{
-                        borderRadius: "16px",
-                        border: "none",
-                        boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)",
+            <div className="h-97.5 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartPendapatan}
+                  margin={{ top: 16, right: 28, left: 8, bottom: 26 }}
+                  barCategoryGap="18%"
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#E8EEFF"
+                  />
+                  <XAxis
+                    dataKey="bulan"
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    textAnchor="middle"
+                    height={64}
+                    tickMargin={16}
+                    padding={{ left: 16, right: 16 }}
+                    tick={{ fill: "#64748B", fontSize: 12, fontWeight: 600 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3b8", fontSize: 12 }}
+                    tickFormatter={(val) => `Rp${Number(val) / 1000000}jt`}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "#F2F7FF" }}
+                    formatter={(value: unknown, name: unknown) => [
+                      formatRupiah(Number(value)),
+                      kategoriFilter === "Semua" ? String(name) : "Pendapatan",
+                    ]}
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "none",
+                      boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)",
+                    }}
+                  />
+
+                  {kategoriFilter === "Semua" && (
+                    <Legend
+                      verticalAlign="top"
+                      align="right"
+                      iconType="circle"
+                      wrapperStyle={{
+                        paddingBottom: 10,
+                        fontSize: 12,
+                        color: "#64748b",
                       }}
                     />
+                  )}
 
-                    {kategoriFilter === "Semua" && (
-                      <Legend
-                        verticalAlign="top"
-                        align="right"
-                        iconType="circle"
-                        wrapperStyle={{
-                          paddingBottom: 10,
-                          fontSize: 12,
-                          color: "#64748b",
-                        }}
-                      />
-                    )}
-
-                    {kategoriFilter === "Semua" ? (
-                      <>
-                        <Bar
-                          dataKey="Restaurant"
-                          stackId="a"
-                          fill={kategoriColor.Restaurant}
-                          radius={[0, 0, 0, 0]}
-                          barSize={28}
-                        />
-                        <Bar
-                          dataKey="Hotel"
-                          stackId="a"
-                          fill={kategoriColor.Hotel}
-                          radius={[0, 0, 0, 0]}
-                          barSize={28}
-                        />
-                        <Bar
-                          dataKey="Hiburan & Kesenian"
-                          stackId="a"
-                          fill={kategoriColor["Hiburan & Kesenian"]}
-                          radius={[8, 8, 0, 0]}
-                          barSize={28}
-                        />
-                      </>
-                    ) : (
+                  {kategoriFilter === "Semua" ? (
+                    <>
                       <Bar
-                        dataKey="total"
-                        fill={kategoriColor[kategoriFilter]}
+                        dataKey="Restaurant"
+                        stackId="a"
+                        fill={kategoriColor.Restaurant}
+                        barSize={28}
+                      />
+                      <Bar
+                        dataKey="Hotel"
+                        stackId="a"
+                        fill={kategoriColor.Hotel}
+                        barSize={28}
+                      />
+                      <Bar
+                        dataKey="Hiburan & Kesenian"
+                        stackId="a"
+                        fill={kategoriColor["Hiburan & Kesenian"]}
+                        barSize={28}
+                      />
+                      <Bar
+                        dataKey="Jasa Parkir"
+                        stackId="a"
+                        fill={kategoriColor["Jasa Parkir"]}
                         radius={[8, 8, 0, 0]}
                         barSize={28}
                       />
-                    )}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-12 gap-8">
-          <Card className="col-span-12 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-8">
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800">
-                    Top 10 Pembayar Tertib
-                  </h3>
-                  <p className="text-slate-400 text-sm">
-                    Periode: {periodeLabel} • Kategori: {kategoriFilter} • Jenis
-                    POS: {jenisPOSFilter}
-                  </p>
-                </div>
-                <div className="text-sm font-extrabold text-slate-700">
-                  {topRows.length} data
-                </div>
-              </div>
-
-              <div className="w-full overflow-auto rounded-2xl border border-slate-200">
-                <Table
-                  aria-label="Tabel Top 10 Pembayar"
-                  removeWrapper
-                  className={[
-                    "min-w-full",
-                    "**:data-[slot=thead]:sticky",
-                    "**:data-[slot=thead]:top-0",
-                    "**:data-[slot=thead]:z-10",
-                    "**:data-[slot=thead]:bg-white",
-                  ].join(" ")}
-                >
-                  <TableHeader>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-16">
-                      No
-                    </TableColumn>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-65">
-                      NPWPD (16 Digit)
-                    </TableColumn>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-55">
-                      Tipe Usaha
-                    </TableColumn>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
-                      Nama Usaha
-                    </TableColumn>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-42.5">
-                      Jenis POS
-                    </TableColumn>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
-                      Total Pendapatan Kotor
-                    </TableColumn>
-                    <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
-                      Total Pajak Terhitung
-                    </TableColumn>
-                  </TableHeader>
-
-                  <TableBody>
-                    {topRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7}>
-                          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                            <span className="text-sm font-semibold">
-                              Data tidak ditemukan
-                            </span>
-                            <span className="text-xs mt-1">
-                              Silakan ubah filter untuk melihat data
-                            </span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      topRows.map((u) => {
-                        const kStyle = kategoriChipStyle(u.tipeUsaha);
-                        const pStyle = posChipStyle(u.jenisPOS);
-                        const pajakTerhitung = Math.round(
-                          u.pendapatanKotor * 0.1,
-                        );
-
-                        return (
-                          <TableRow
-                            key={String(u.id)}
-                            className="border-b border-slate-50 last:border-none hover:bg-slate-50 transition-colors"
-                          >
-                            <TableCell className="text-center px-4 py-4">
-                              <span className="text-slate-700 font-extrabold text-sm">
-                                {u.no}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-center px-4 py-4">
-                              <span className="font-extrabold text-slate-700 tracking-wider">
-                                {u.npwpd}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-center px-4 py-4">
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                className="text-xs font-extrabold px-3 py-1"
-                                style={{
-                                  backgroundColor: kStyle.bg,
-                                  color: kStyle.fg,
-                                }}
-                              >
-                                {u.tipeUsaha}
-                              </Chip>
-                            </TableCell>
-
-                            <TableCell className="text-center px-4 py-4">
-                              <span
-                                className="font-bold text-slate-700 text-sm leading-snug inline-block"
-                                style={{
-                                  maxWidth: 360,
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                                title={u.namaUsaha}
-                              >
-                                {u.namaUsaha}
-                              </span>
-                            </TableCell>
-
-                            <TableCell className="text-center px-4 py-4">
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                className="text-xs font-extrabold px-3 py-1"
-                                style={{
-                                  backgroundColor: pStyle.bg,
-                                  color: pStyle.fg,
-                                }}
-                              >
-                                {u.jenisPOS}
-                              </Chip>
-                            </TableCell>
-
-                            <TableCell className="text-center px-4 py-4">
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                className="font-extrabold text-xs px-3 py-1"
-                                style={{
-                                  backgroundColor: "#EEF2FF",
-                                  color: "#1E3A8A",
-                                }}
-                              >
-                                {formatRupiah(u.pendapatanKotor)}
-                              </Chip>
-                            </TableCell>
-
-                            <TableCell className="text-center px-4 py-4">
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                className="font-extrabold text-xs px-3 py-1"
-                                style={{
-                                  backgroundColor: "#DBEAFE",
-                                  color: "#1E40AF",
-                                }}
-                              >
-                                {formatRupiah(pajakTerhitung)}
-                              </Chip>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-12 gap-8">
-          <Card className="col-span-12 border-none shadow-xl shadow-slate-200/50 rounded-3xl">
-            <CardBody className="p-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800">
-                    Analisis Tren Pajak
-                  </h3>
-                  <p className="text-slate-400 text-sm">
-                    Tren total pendapatan ({tahunFilter})
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => navigate("/analisis")}
-                  className="px-4 py-2 text-sm font-extrabold rounded-xl transition"
-                  style={{
-                    border: `2px solid ${THEME.accent}`,
-                    color: THEME.accent,
-                    backgroundColor: "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    (
-                      e.currentTarget as HTMLButtonElement
-                    ).style.backgroundColor = "rgba(30,99,214,0.08)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (
-                      e.currentTarget as HTMLButtonElement
-                    ).style.backgroundColor = "transparent";
-                  }}
-                >
-                  Lihat Detail
-                </button>
-              </div>
-
-              <div className="h-87.5">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={chartTren}
-                    margin={{ top: 16, right: 36, left: 20, bottom: 28 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#E8EEFF"
-                    />
-                    <XAxis
-                      dataKey="bulan"
-                      axisLine={false}
-                      tickLine={false}
-                      interval={0}
-                      angle={0}
-                      textAnchor="middle"
-                      height={66}
-                      tickMargin={16}
-                      padding={{ left: 28, right: 28 }}
-                      tick={{ fill: "#64748B", fontSize: 12, fontWeight: 600 }}
-                    />
-                    <YAxis hide />
-                    <Tooltip
-                      formatter={(value: unknown) => [
-                        formatRupiah(Number(value)),
-                        "Total",
-                      ]}
-                      contentStyle={{
-                        borderRadius: "16px",
-                        border: "none",
-                        boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)",
-                      }}
-                    />
-                    <Line
-                      type="monotone"
+                    </>
+                  ) : (
+                    <Bar
                       dataKey="total"
-                      stroke={THEME.accent}
-                      strokeWidth={5}
-                      dot={{
-                        r: 6,
-                        fill: THEME.accent,
-                        strokeWidth: 3,
-                        stroke: "#fff",
-                      }}
-                      activeDot={{ r: 8, strokeWidth: 2 }}
+                      fill={kategoriColor[kategoriFilter]}
+                      radius={[8, 8, 0, 0]}
+                      barSize={28}
                     />
-                  </LineChart>
-                </ResponsiveContainer>
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card
+          className="border-none shadow-sm rounded-3xl bg-white"
+          style={{ border: `1px solid ${THEME.border}` }}
+        >
+          <CardBody className="p-6 md:p-8">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">
+                  Top 10 Pembayar Tertib
+                </h3>
+                <p className="text-slate-400 text-sm">
+                  Periode: {periodeLabel} • Kategori: {kategoriFilter} • Jenis
+                  POS: {jenisPOSFilter}
+                </p>
               </div>
-            </CardBody>
-          </Card>
-        </div>
+              <div className="text-sm font-extrabold text-slate-700">
+                {topRows.length} data
+              </div>
+            </div>
+
+            <div className="w-full overflow-auto rounded-2xl border border-slate-200">
+              <Table aria-label="Tabel Top 10 Pembayar" removeWrapper>
+                <TableHeader>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-16">
+                    No
+                  </TableColumn>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-65">
+                    NPWPD
+                  </TableColumn>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-55">
+                    Tipe Usaha
+                  </TableColumn>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
+                    Nama Usaha
+                  </TableColumn>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-42.5">
+                    Jenis POS
+                  </TableColumn>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
+                    Total Pendapatan Kotor
+                  </TableColumn>
+                  <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
+                    Total Pajak Terhitung
+                  </TableColumn>
+                </TableHeader>
+
+                <TableBody>
+                  {topRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7}>
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                          <span className="text-sm font-semibold">
+                            Data tidak ditemukan
+                          </span>
+                          <span className="text-xs mt-1">
+                            Silakan ubah filter untuk melihat data
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    topRows.map((u) => {
+                      const kStyle = kategoriChipStyle(u.tipeUsaha);
+                      const pStyle = posChipStyle(u.jenisPOS);
+
+                      return (
+                        <TableRow
+                          key={String(u.id)}
+                          className="border-b border-slate-50 last:border-none hover:bg-slate-50 transition-colors"
+                        >
+                          <TableCell className="text-center px-4 py-4">
+                            <span className="text-slate-700 font-extrabold text-sm">
+                              {u.no}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-4">
+                            <span className="font-extrabold text-slate-700 tracking-wider">
+                              {u.npwpd}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-4">
+                            <Chip
+                              size="sm"
+                              variant="flat"
+                              className="text-xs font-extrabold px-3 py-1"
+                              style={{
+                                backgroundColor: kStyle.bg,
+                                color: kStyle.fg,
+                              }}
+                            >
+                              {u.tipeUsaha}
+                            </Chip>
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-4">
+                            <span className="font-bold text-slate-700 text-sm">
+                              {u.namaUsaha}
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-4">
+                            <Chip
+                              size="sm"
+                              variant="flat"
+                              className="text-xs font-extrabold px-3 py-1"
+                              style={{
+                                backgroundColor: pStyle.bg,
+                                color: pStyle.fg,
+                              }}
+                            >
+                              {u.jenisPOS}
+                            </Chip>
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-4">
+                            <Chip
+                              size="sm"
+                              variant="flat"
+                              className="font-extrabold text-xs px-3 py-1"
+                              style={{
+                                backgroundColor: "#EEF2FF",
+                                color: "#1E3A8A",
+                              }}
+                            >
+                              {formatRupiah(u.pendapatanKotor)}
+                            </Chip>
+                          </TableCell>
+
+                          <TableCell className="text-center px-4 py-4">
+                            <Chip
+                              size="sm"
+                              variant="flat"
+                              className="font-extrabold text-xs px-3 py-1"
+                              style={{
+                                backgroundColor: "#DBEAFE",
+                                color: "#1E40AF",
+                              }}
+                            >
+                              {formatRupiah(u.pajakTerhitung)}
+                            </Chip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card
+          className="border-none shadow-sm rounded-3xl bg-white"
+          style={{ border: `1px solid ${THEME.border}` }}
+        >
+          <CardBody className="p-6 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">
+                  Analisis Tren Pajak
+                </h3>
+                <p className="text-slate-400 text-sm">
+                  Tren total pendapatan ({tahunFilter})
+                </p>
+              </div>
+
+              <button
+                onClick={() => navigate("/analisis")}
+                className="px-4 py-2 text-sm font-extrabold rounded-xl transition"
+                style={{
+                  border: `2px solid ${THEME.accent}`,
+                  color: THEME.accent,
+                  backgroundColor: "transparent",
+                }}
+              >
+                Lihat Detail
+              </button>
+            </div>
+
+            <div className="h-87.5">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartTren}
+                  margin={{ top: 16, right: 36, left: 20, bottom: 28 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#E8EEFF"
+                  />
+                  <XAxis
+                    dataKey="bulan"
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    textAnchor="middle"
+                    height={66}
+                    tickMargin={16}
+                    padding={{ left: 28, right: 28 }}
+                    tick={{ fill: "#64748B", fontSize: 12, fontWeight: 600 }}
+                  />
+                  <YAxis hide />
+                  <Tooltip
+                    formatter={(value: unknown) => [
+                      formatRupiah(Number(value)),
+                      "Total",
+                    ]}
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "none",
+                      boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke={THEME.accent}
+                    strokeWidth={5}
+                    dot={{
+                      r: 6,
+                      fill: THEME.accent,
+                      strokeWidth: 3,
+                      stroke: "#fff",
+                    }}
+                    activeDot={{ r: 8, strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardBody>
+        </Card>
 
         <div
           className="pt-2 text-center text-xs"

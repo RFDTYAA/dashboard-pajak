@@ -595,7 +595,7 @@ export default function Analisis() {
 
   const growthPercentage = overview.summary.growthPercentage ?? 0;
   const recommendationText =
-    overview.summary.recommendation || "Belum ada rekomendasi dari backend.";
+    overview.summary.recommendation || "Belum ada data dari backend & ML.";
 
   useEffect(() => {
     let alive = true;

@@ -92,12 +92,10 @@ function getString(value: unknown, fallback = "") {
 
 function getNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-
   if (typeof value === "string") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
-
   return fallback;
 }
 
@@ -105,26 +103,21 @@ function getObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
   }
-
   return null;
 }
 
 function getArrayFromResponse(response: unknown): RawTransaction[] {
   const root = getObject(response);
   if (!root) return [];
-
   if (Array.isArray(root.data)) return root.data as RawTransaction[];
   if (Array.isArray(root.items)) return root.items as RawTransaction[];
   if (Array.isArray(root.rows)) return root.rows as RawTransaction[];
-
   const dataObj = getObject(root.data);
-
   if (dataObj) {
     if (Array.isArray(dataObj.data)) return dataObj.data as RawTransaction[];
     if (Array.isArray(dataObj.items)) return dataObj.items as RawTransaction[];
     if (Array.isArray(dataObj.rows)) return dataObj.rows as RawTransaction[];
   }
-
   return [];
 }
 
@@ -144,7 +137,6 @@ function getTransactionDate(item: RawTransaction) {
 
 function getNamaWajibPajak(item: RawTransaction) {
   const taxPayer = getTaxPayer(item);
-
   return (
     getString(taxPayer?.business_name) ||
     getString(taxPayer?.businessName) ||
@@ -159,7 +151,6 @@ function getNamaWajibPajak(item: RawTransaction) {
 
 function getWajibPajakId(item: RawTransaction) {
   const taxPayer = getTaxPayer(item);
-
   return (
     getString(taxPayer?.id) ||
     getString(item.taxpayer_id) ||
@@ -214,17 +205,13 @@ function formatDateInput(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-
   return `${year}-${month}-${day}`;
 }
 
 function formatTanggalIndonesia(value: string) {
   if (!value) return "-";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return "-";
-
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "long",
@@ -236,9 +223,7 @@ function isDateInRange(dateValue: string, start: string, end: string) {
   const date = new Date(dateValue);
   const startDate = new Date(`${start}T00:00:00`);
   const endDate = new Date(`${end}T23:59:59`);
-
   if (Number.isNaN(date.getTime())) return false;
-
   return date >= startDate && date <= endDate;
 }
 
@@ -249,26 +234,20 @@ function clamp(value: number, min: number, max: number) {
 function paginationRange(current: number, total: number) {
   const visible = 5;
   const half = Math.floor(visible / 2);
-
   let start = current - half;
   let end = current + half;
-
   if (start < 1) {
     start = 1;
     end = Math.min(total, visible);
   }
-
   if (end > total) {
     end = total;
     start = Math.max(1, total - visible + 1);
   }
-
   const pages: number[] = [];
-
   for (let page = start; page <= end; page++) {
     pages.push(page);
   }
-
   return { start, end, pages };
 }
 
@@ -297,12 +276,10 @@ function SummaryCard({
             <p className="text-[11px] uppercase tracking-wide font-extrabold text-slate-500 shrink-0 truncate">
               {label}
             </p>
-
             <div className="flex-1 flex flex-col justify-center py-1 min-w-0">
               <h3 className="text-lg font-extrabold text-slate-900 truncate">
                 {title}
               </h3>
-
               {value && (
                 <p
                   className="mt-1 text-sm font-bold truncate"
@@ -312,14 +289,12 @@ function SummaryCard({
                 </p>
               )}
             </div>
-
             {sub && (
               <p className="text-xs text-slate-400 font-semibold shrink-0 mt-auto truncate">
                 {sub}
               </p>
             )}
           </div>
-
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
             style={{ backgroundColor: iconBg, color: iconColor }}
@@ -339,7 +314,6 @@ export default function Laporan() {
   const [openSort, setOpenSort] = useState(false);
   const [page, setPage] = useState(1);
 
-  // State untuk Pop-up Modal Unduh
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("semua");
   const [exportFormat, setExportFormat] = useState<string>("pdf");
@@ -362,12 +336,10 @@ export default function Laporan() {
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-
       if (sortRef.current && !sortRef.current.contains(target)) {
         setOpenSort(false);
       }
     };
-
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
@@ -379,15 +351,10 @@ export default function Laporan() {
     async function loadData() {
       try {
         const response = await apiRequest<unknown>("/transaction", {
-          query: {
-            page: 1,
-            size: 1000,
-          },
+          query: { page: 1, size: 1000 },
           signal: controller.signal,
         });
-
         if (!alive) return;
-
         setTransactions(getArrayFromResponse(response));
       } catch {
         if (!alive || controller.signal.aborted) return;
@@ -396,7 +363,6 @@ export default function Laporan() {
     }
 
     void loadData();
-
     return () => {
       alive = false;
       controller.abort();
@@ -421,7 +387,6 @@ export default function Laporan() {
       const totalPendapatanPajak = pendapatan + pajak;
 
       const existing = map.get(id);
-
       if (existing) {
         existing.jumlahTransaksi += 1;
         existing.totalPendapatanPajak += totalPendapatanPajak;
@@ -439,28 +404,17 @@ export default function Laporan() {
     }
 
     const keyword = search.trim().toLowerCase();
-
     const result = Array.from(map.values()).filter((item) =>
       keyword ? item.nama.toLowerCase().includes(keyword) : true,
     );
 
     result.sort((a, b) => {
-      if (sortBy === "lowestRevenue") {
+      if (sortBy === "lowestRevenue")
         return a.totalPendapatanPajak - b.totalPendapatanPajak;
-      }
-
-      if (sortBy === "highestTax") {
-        return b.totalPajak - a.totalPajak;
-      }
-
-      if (sortBy === "mostTransactions") {
+      if (sortBy === "highestTax") return b.totalPajak - a.totalPajak;
+      if (sortBy === "mostTransactions")
         return b.jumlahTransaksi - a.jumlahTransaksi;
-      }
-
-      if (sortBy === "nameAsc") {
-        return a.nama.localeCompare(b.nama);
-      }
-
+      if (sortBy === "nameAsc") return a.nama.localeCompare(b.nama);
       return b.totalPendapatanPajak - a.totalPendapatanPajak;
     });
 
@@ -489,31 +443,21 @@ export default function Laporan() {
     const lowest = [...rows].sort(
       (a, b) => a.totalPendapatanPajak - b.totalPendapatanPajak,
     )[0];
-
     const totalPendapatanPajak = rows.reduce(
       (sum, item) => sum + item.totalPendapatanPajak,
       0,
     );
-
     const totalPajak = rows.reduce((sum, item) => sum + item.totalPajak, 0);
-
-    return {
-      highest,
-      lowest,
-      totalPendapatanPajak,
-      totalPajak,
-    };
+    return { highest, lowest, totalPendapatanPajak, totalPajak };
   }, [rows]);
 
   const sortLabel =
     SORT_OPTIONS.find((item) => item.key === sortBy)?.label ??
     "Urutkan Berdasarkan";
 
-  // FUNGSI UTAMA UNDUH
   function executeDownload() {
     let dataToExport = rows;
 
-    // 1. Filter Kategori
     if (selectedCategory !== "semua") {
       dataToExport = rows.filter((r) => {
         const cat = r.kategori.toLowerCase();
@@ -528,7 +472,6 @@ export default function Laporan() {
     }
 
     if (exportFormat === "csv") {
-      // PROSES DOWNLOAD CSV
       const header = [
         "No",
         "Nama",
@@ -543,13 +486,11 @@ export default function Laporan() {
         item.totalPendapatanPajak,
         item.totalPajak,
       ]);
-
       const csvContent = [header, ...body]
         .map((row) =>
           row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
         )
         .join("\n");
-
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -558,10 +499,8 @@ export default function Laporan() {
       link.click();
       URL.revokeObjectURL(url);
     } else {
-      // PROSES DOWNLOAD PDF MODERN (DASHBOARD STYLE)
       const doc = new jsPDF("p", "mm", "a4");
 
-      // HEADER
       doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
       doc.text("PEMERINTAH KABUPATEN ACEH TENGAH", 105, 16, {
@@ -571,7 +510,6 @@ export default function Laporan() {
       doc.text("BADAN PENGELOLAAN KEUANGAN DAERAH", 105, 22, {
         align: "center",
       });
-
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       doc.text(
@@ -580,8 +518,6 @@ export default function Laporan() {
         27,
         { align: "center" },
       );
-
-      // GARIS PEMISAH HEADER
       doc.setLineWidth(0.5);
       doc.line(14, 31, 196, 31);
 
@@ -594,7 +530,6 @@ export default function Laporan() {
       const selectedLabel =
         KATEGORI_OPTIONS.find((k) => k.key === selectedCategory)?.label ?? "-";
 
-      // INFO LAPORAN
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       doc.text("Periode Transaksi", 14, 51);
@@ -608,17 +543,6 @@ export default function Laporan() {
       doc.text("Tanggal Cetak", 14, 61);
       doc.text(`: ${new Date().toLocaleString("id-ID")}`, 45, 61);
 
-      // DISCLAIMER
-      doc.setFontSize(7);
-      doc.setTextColor(120);
-      const disclaimer =
-        "Disclaimer: Dokumen ini mencantumkan data wajib pajak sesuai filter kategori dan periode yang dipilih. Harap diperhatikan bahwa informasi ini bersifat rahasia dan penggunaannya diatur oleh kebijakan privasi dan keamanan data yang berlaku.";
-      const splitDisclaimer = doc.splitTextToSize(disclaimer, 182);
-      doc.text(splitDisclaimer, 14, 68);
-
-      // ==========================================
-      // KOTAK RINGKASAN GAYA DASHBOARD (SUPER RAPI)
-      // ==========================================
       const totalTransaksi = dataToExport.reduce(
         (sum, item) => sum + item.jumlahTransaksi,
         0,
@@ -634,15 +558,12 @@ export default function Laporan() {
 
       doc.setDrawColor(200);
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, 80, 182, 18, 2, 2, "FD"); // Background Kotak
-
-      // Garis Pemisah Vertikal di Dalam Kotak
+      doc.roundedRect(14, 80, 182, 18, 2, 2, "FD");
       doc.setDrawColor(226, 232, 240);
       doc.line(55, 80, 55, 98);
       doc.line(100, 80, 100, 98);
       doc.line(155, 80, 155, 98);
 
-      // Teks Label Atas (Warna Abu)
       doc.setFontSize(8);
       doc.setTextColor(100);
       doc.setFont("helvetica", "bold");
@@ -651,7 +572,6 @@ export default function Laporan() {
       doc.text("Total Pendapatan + Pajak", 127.5, 86, { align: "center" });
       doc.text("Total Pajak", 175.5, 86, { align: "center" });
 
-      // Teks Value Bawah (Warna Hitam)
       doc.setFontSize(9);
       doc.setTextColor(0);
       doc.text(`${dataToExport.length} WP`, 34.5, 94, { align: "center" });
@@ -661,9 +581,6 @@ export default function Laporan() {
       });
       doc.text(`${formatRupiah(totalPjk)}`, 175.5, 94, { align: "center" });
 
-      // ==========================================
-      // TABEL TRANSAKSI
-      // ==========================================
       autoTable(doc, {
         startY: 105,
         head: [
@@ -707,7 +624,7 @@ export default function Laporan() {
       doc.save(`Laporan-Ringkasan-Transaksi.pdf`);
     }
 
-    setIsDownloadModalOpen(false); // Tutup Modal setelah selesai unduh
+    setIsDownloadModalOpen(false);
   }
 
   return (
@@ -737,7 +654,6 @@ export default function Laporan() {
                 className="w-8 h-8 object-contain"
               />
             </div>
-
             <div className="min-w-0">
               <div
                 className="text-white text-2xl md:text-[30px] leading-tight truncate"
@@ -745,11 +661,9 @@ export default function Laporan() {
               >
                 {BRAND.title}
               </div>
-
               <div className="text-white/80 text-sm mt-1">{BRAND.subtitle}</div>
             </div>
           </div>
-
           <div
             className="flex items-center gap-3 px-5 py-3 rounded-2xl shrink-0 overflow-x-auto"
             style={{
@@ -777,7 +691,6 @@ export default function Laporan() {
             iconBg="#DCFCE7"
             iconColor="#16A34A"
           />
-
           <SummaryCard
             label="Transaksi Terendah"
             title={recap.lowest?.nama ?? "-"}
@@ -787,7 +700,6 @@ export default function Laporan() {
             iconBg="#FEE2E2"
             iconColor="#DC2626"
           />
-
           <SummaryCard
             label="Total Pendapatan + Pajak"
             title={formatRupiah(recap.totalPendapatanPajak)}
@@ -796,7 +708,6 @@ export default function Laporan() {
             iconBg="#DBEAFE"
             iconColor="#2563EB"
           />
-
           <SummaryCard
             label="Total Pajak"
             title={formatRupiah(recap.totalPajak)}
@@ -839,12 +750,9 @@ export default function Laporan() {
                 <div className="relative" ref={sortRef}>
                   <button
                     type="button"
-                    onClick={() => setOpenSort((value) => !value)}
+                    onClick={() => setOpenSort((v) => !v)}
                     className="w-full inline-flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border bg-white hover:bg-slate-50 transition text-sm"
-                    style={{
-                      borderColor: THEME.border,
-                      color: THEME.text,
-                    }}
+                    style={{ borderColor: THEME.border, color: THEME.text }}
                   >
                     <span className="truncate">{sortLabel}</span>
                     <ChevronDown
@@ -855,7 +763,6 @@ export default function Laporan() {
                       }}
                     />
                   </button>
-
                   {openSort && (
                     <div
                       className="absolute left-0 top-full mt-2 rounded-2xl bg-white z-50 overflow-hidden"
@@ -867,7 +774,6 @@ export default function Laporan() {
                     >
                       {SORT_OPTIONS.map((item, index) => {
                         const selected = item.key === sortBy;
-
                         return (
                           <button
                             key={item.key}
@@ -908,8 +814,8 @@ export default function Laporan() {
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(event) => {
-                      setStartDate(event.target.value);
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
                       setPage(1);
                     }}
                     className="w-full bg-white rounded-xl pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
@@ -919,7 +825,6 @@ export default function Laporan() {
                     }}
                   />
                 </div>
-
                 <div className="relative">
                   <CalendarDays
                     className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2"
@@ -928,8 +833,8 @@ export default function Laporan() {
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(event) => {
-                      setEndDate(event.target.value);
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
                       setPage(1);
                     }}
                     className="w-full bg-white rounded-xl pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
@@ -941,15 +846,11 @@ export default function Laporan() {
                 </div>
               </div>
 
-              {/* TOMBOL BUKA MODAL */}
               <button
                 type="button"
                 onClick={() => setIsDownloadModalOpen(true)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition text-sm shrink-0 font-bold"
-                style={{
-                  backgroundColor: THEME.headerBg,
-                  color: "#FFFFFF",
-                }}
+                style={{ backgroundColor: THEME.headerBg, color: "#FFFFFF" }}
               >
                 <Download className="w-4 h-4" />
                 Unduh Ringkasan
@@ -979,7 +880,6 @@ export default function Laporan() {
                   Aksi
                 </TableColumn>
               </TableHeader>
-
               <TableBody>
                 {pageRows.length === 0 ? (
                   <TableRow>
@@ -1003,13 +903,11 @@ export default function Laporan() {
                       <TableCell className="text-center px-4 py-4">
                         {(safePage - 1) * PAGE_SIZE + index + 1}
                       </TableCell>
-
                       <TableCell className="text-left px-4 py-4">
                         <span className="font-semibold text-slate-700">
                           {item.nama}
                         </span>
                       </TableCell>
-
                       <TableCell className="text-center px-4 py-4">
                         <Chip
                           size="sm"
@@ -1024,19 +922,16 @@ export default function Laporan() {
                           {item.jumlahTransaksi} Transaksi
                         </Chip>
                       </TableCell>
-
                       <TableCell className="text-left px-4 py-4">
                         <span className="font-extrabold text-slate-700">
                           {formatRupiah(item.totalPendapatanPajak)}
                         </span>
                       </TableCell>
-
                       <TableCell className="text-left px-4 py-4">
                         <span className="font-extrabold text-slate-700">
                           {formatRupiah(item.totalPajak)}
                         </span>
                       </TableCell>
-
                       <TableCell className="text-center px-4 py-4">
                         <button
                           type="button"
@@ -1044,16 +939,11 @@ export default function Laporan() {
                           style={{ color: THEME.accent }}
                           onClick={() =>
                             alert(
-                              `${item.nama}\n\nJumlah transaksi: ${
-                                item.jumlahTransaksi
-                              }\nTotal pendapatan + pajak: ${formatRupiah(
-                                item.totalPendapatanPajak,
-                              )}\nTotal pajak: ${formatRupiah(item.totalPajak)}`,
+                              `${item.nama}\n\nJumlah transaksi: ${item.jumlahTransaksi}\nTotal pendapatan + pajak: ${formatRupiah(item.totalPendapatanPajak)}\nTotal pajak: ${formatRupiah(item.totalPajak)}`,
                             )
                           }
                         >
-                          <Eye className="w-4 h-4" />
-                          Detail
+                          <Eye className="w-4 h-4" /> Detail
                         </button>
                       </TableCell>
                     </TableRow>
@@ -1065,46 +955,26 @@ export default function Laporan() {
 
           <div className="px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="text-sm" style={{ color: THEME.muted }}>
-              Menampilkan <b style={{ color: THEME.text }}>{showingStart}</b>
-              {" - "}
+              Menampilkan <b style={{ color: THEME.text }}>{showingStart}</b> -{" "}
               <b style={{ color: THEME.text }}>{showingEnd}</b> dari{" "}
               <b style={{ color: THEME.text }}>{totalItems}</b> data
             </div>
-
             <div className="flex items-center gap-2 justify-end">
               <button
                 type="button"
                 className="w-10 h-10 rounded-xl border bg-white hover:bg-slate-50 transition disabled:opacity-50"
                 style={{ borderColor: THEME.border }}
-                onClick={() =>
-                  setPage((value) => clamp(value - 1, 1, totalPages))
-                }
+                onClick={() => setPage((v) => clamp(v - 1, 1, totalPages))}
                 disabled={safePage <= 1}
               >
                 {"<"}
               </button>
-
-              {pagination.start > 1 && (
-                <>
-                  <button
-                    type="button"
-                    className="w-10 h-10 rounded-xl border bg-white"
-                    style={{ borderColor: THEME.border }}
-                    onClick={() => setPage(1)}
-                  >
-                    1
-                  </button>
-                  <span className="px-1 text-slate-400">…</span>
-                </>
-              )}
-
               {pagination.pages.map((item) => {
                 const active = item === safePage;
-
                 return (
                   <button
-                    type="button"
                     key={item}
+                    type="button"
                     className="w-10 h-10 rounded-xl border transition"
                     style={{
                       borderColor: THEME.border,
@@ -1118,28 +988,11 @@ export default function Laporan() {
                   </button>
                 );
               })}
-
-              {pagination.end < totalPages && (
-                <>
-                  <span className="px-1 text-slate-400">…</span>
-                  <button
-                    type="button"
-                    className="w-10 h-10 rounded-xl border bg-white"
-                    style={{ borderColor: THEME.border }}
-                    onClick={() => setPage(totalPages)}
-                  >
-                    {totalPages}
-                  </button>
-                </>
-              )}
-
               <button
                 type="button"
                 className="w-10 h-10 rounded-xl border bg-white hover:bg-slate-50 transition disabled:opacity-50"
                 style={{ borderColor: THEME.border }}
-                onClick={() =>
-                  setPage((value) => clamp(value + 1, 1, totalPages))
-                }
+                onClick={() => setPage((v) => clamp(v + 1, 1, totalPages))}
                 disabled={safePage >= totalPages}
               >
                 {">"}
@@ -1152,43 +1005,53 @@ export default function Laporan() {
           className="pt-1 text-center text-xs"
           style={{ color: THEME.muted }}
         >
-          ©️ 2026 Kabupaten Aceh Tengah • PT. Biner Teknologi Indonesia
+          © 2026 Kabupaten Aceh Tengah • PT. Biner Teknologi Indonesia
         </div>
       </div>
 
-      {/* ========================================== */}
-      {/* POP-UP MODAL UNDUH PREMIUM                 */}
-      {/* ========================================== */}
       <Modal
         isOpen={isDownloadModalOpen}
         onOpenChange={setIsDownloadModalOpen}
         placement="center"
-        size="md"
+        size="xl"
+        backdrop="blur"
+        classNames={{
+          backdrop: "bg-black/40",
+        }}
       >
-        <ModalContent>
+        <ModalContent className="rounded-2xl shadow-2xl border border-slate-200 bg-white">
           {(onClose) => (
             <>
-              <ModalHeader className="flex flex-col gap-1 border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-bold text-slate-800">
-                  Unduh Laporan Ringkasan
-                </h2>
-                <p className="text-sm font-normal text-slate-500">
-                  Sesuaikan parameter laporan yang ingin Anda unduh.
-                </p>
+              <ModalHeader className="px-6 pt-6 pb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">
+                    Unduh Ringkasan Transaksi
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Pilih filter data yang ingin diunduh ke dalam format PDF.
+                  </p>
+                </div>
               </ModalHeader>
 
-              <ModalBody className="py-6 flex flex-col gap-5">
-                {/* PILIH KATEGORI */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-slate-700">
+              <ModalBody className="px-6 pb-6 space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Kategori Wajib Pajak
                   </label>
                   <Select
-                    placeholder="Pilih Kategori"
                     selectedKeys={[selectedCategory]}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full"
+                    defaultSelectedKeys={["semua"]}
+                    onSelectionChange={(keys) => {
+                      const value = Array.from(keys)[0] as string;
+                      if (value) setSelectedCategory(value);
+                    }}
                     variant="bordered"
+                    className="w-full"
+                    classNames={{
+                      trigger: "h-12 rounded-xl",
+                      popoverContent:
+                        "bg-white shadow-xl border border-slate-200 rounded-xl",
+                    }}
                   >
                     {KATEGORI_OPTIONS.map((cat) => (
                       <SelectItem key={cat.key}>{cat.label}</SelectItem>
@@ -1196,70 +1059,63 @@ export default function Laporan() {
                   </Select>
                 </div>
 
-                {/* PILIH FORMAT FILE */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-slate-700">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
                     Format Laporan
                   </label>
                   <Select
-                    placeholder="Pilih Format"
                     selectedKeys={[exportFormat]}
-                    onChange={(e) => setExportFormat(e.target.value)}
-                    className="w-full"
+                    defaultSelectedKeys={["pdf"]}
+                    onSelectionChange={(keys) => {
+                      const value = Array.from(keys)[0] as string;
+                      if (value) setExportFormat(value);
+                    }}
                     variant="bordered"
+                    className="w-full"
+                    classNames={{
+                      trigger: "h-12 rounded-xl",
+                      popoverContent:
+                        "bg-white shadow-xl border border-slate-200 rounded-xl",
+                    }}
                   >
-                    <SelectItem
-                      key="pdf"
-                      startContent={
-                        <span className="text-red-500 font-bold mr-1">PDF</span>
-                      }
-                    >
+                    <SelectItem key="pdf">
                       Dokumen Cetak Resmi (.pdf)
                     </SelectItem>
-                    <SelectItem
-                      key="csv"
-                      startContent={
-                        <span className="text-green-600 font-bold mr-1">
-                          CSV
-                        </span>
-                      }
-                    >
-                      Data Excel Spreadsheet (.csv)
-                    </SelectItem>
+                    <SelectItem key="csv">Data Spreadsheet (.csv)</SelectItem>
                   </Select>
                 </div>
 
-                {/* INFO PERIODE (READ-ONLY) */}
-                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3 mt-1">
-                  <CalendarDays className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-blue-900">
-                      Periode Laporan Terpilih
-                    </p>
-                    <p className="text-xs font-medium text-blue-700 mt-1">
-                      {formatTanggalIndonesia(startDate)} -{" "}
-                      {formatTanggalIndonesia(endDate)}
-                    </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <CalendarDays className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">
+                        Periode Laporan
+                      </p>
+                      <p className="text-sm text-slate-600 mt-0.5">
+                        {formatTanggalIndonesia(startDate)} —{" "}
+                        {formatTanggalIndonesia(endDate)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </ModalBody>
 
-              <ModalFooter className="border-t border-slate-100 pt-4">
+              <ModalFooter className="px-6 pb-6 pt-4 border-t border-slate-100 flex justify-end gap-3">
                 <Button
-                  color="danger"
                   variant="light"
                   onPress={onClose}
-                  className="font-semibold"
+                  className="font-semibold px-6"
                 >
                   Batal
                 </Button>
                 <Button
-                  color="primary"
                   onPress={executeDownload}
-                  style={{ backgroundColor: THEME.headerBg, color: "#fff" }}
-                  className="font-semibold shadow-md"
+                  className="font-semibold px-7 bg-[#0B2E6B] text-white rounded-xl"
                 >
-                  <Download className="w-4 h-4 mr-1" />
+                  <Download className="w-4 h-4 mr-2" />
                   Unduh Sekarang
                 </Button>
               </ModalFooter>

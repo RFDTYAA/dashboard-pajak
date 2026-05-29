@@ -9,6 +9,14 @@ import {
   TableColumn,
   TableHeader,
   TableRow,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Select,
+  SelectItem,
 } from "@heroui/react";
 import {
   ArrowDown,
@@ -22,12 +30,15 @@ import {
   Coins,
 } from "lucide-react";
 import { apiRequest } from "../lib/api";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type RawTransaction = Record<string, unknown>;
 
 type ReportRow = {
   id: string;
   nama: string;
+  kategori: string;
   jumlahTransaksi: number;
   totalPendapatanPajak: number;
   totalPajak: number;
@@ -63,6 +74,14 @@ const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
   { key: "highestTax", label: "Pajak Tertinggi" },
   { key: "mostTransactions", label: "Transaksi Terbanyak" },
   { key: "nameAsc", label: "Nama A-Z" },
+];
+
+const KATEGORI_OPTIONS = [
+  { key: "semua", label: "Semua Kategori" },
+  { key: "restoran", label: "Restaurant (Restoran)" },
+  { key: "hotel", label: "Hotel" },
+  { key: "hiburan", label: "Hiburan & Kesenian" },
+  { key: "parkir", label: "Jasa Parkir" },
 ];
 
 function getString(value: unknown, fallback = "") {
@@ -148,6 +167,17 @@ function getWajibPajakId(item: RawTransaction) {
     getString(item.tax_payer_id) ||
     getString(item.id) ||
     getNamaWajibPajak(item)
+  );
+}
+
+function getKategori(item: RawTransaction) {
+  const taxPayer = getTaxPayer(item);
+  return (
+    getString(taxPayer?.category) ||
+    getString(taxPayer?.kategori) ||
+    getString(item.category) ||
+    getString(item.kategori) ||
+    "-"
   );
 }
 
@@ -253,30 +283,41 @@ function SummaryCard({
 }: {
   label: string;
   title: string;
-  value: string;
-  sub: string;
+  value?: string;
+  sub?: string;
   icon: React.ReactNode;
   iconBg: string;
   iconColor: string;
 }) {
   return (
     <Card className="h-full border-none rounded-2xl bg-white shadow-md shadow-slate-200/60">
-      <CardBody className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wide font-extrabold text-slate-500">
+      <CardBody className="p-5 h-full">
+        <div className="flex items-start justify-between gap-4 h-full">
+          <div className="min-w-0 flex flex-col h-full flex-1">
+            <p className="text-[11px] uppercase tracking-wide font-extrabold text-slate-500 shrink-0 truncate">
               {label}
             </p>
 
-            <h3 className="mt-2 text-lg font-extrabold text-slate-900 truncate">
-              {title}
-            </h3>
+            <div className="flex-1 flex flex-col justify-center py-1 min-w-0">
+              <h3 className="text-lg font-extrabold text-slate-900 truncate">
+                {title}
+              </h3>
 
-            <p className="mt-1 text-sm font-bold" style={{ color: iconColor }}>
-              {value}
-            </p>
+              {value && (
+                <p
+                  className="mt-1 text-sm font-bold truncate"
+                  style={{ color: iconColor }}
+                >
+                  {value}
+                </p>
+              )}
+            </div>
 
-            <p className="mt-1 text-xs text-slate-400 font-semibold">{sub}</p>
+            {sub && (
+              <p className="text-xs text-slate-400 font-semibold shrink-0 mt-auto truncate">
+                {sub}
+              </p>
+            )}
           </div>
 
           <div
@@ -297,6 +338,11 @@ export default function Laporan() {
   const [sortBy, setSortBy] = useState<SortKey>("highestRevenue");
   const [openSort, setOpenSort] = useState(false);
   const [page, setPage] = useState(1);
+
+  // State untuk Pop-up Modal Unduh
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("semua");
+  const [exportFormat, setExportFormat] = useState<string>("pdf");
 
   const today = new Date();
   const firstDayThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -369,6 +415,7 @@ export default function Laporan() {
     for (const item of filteredTransactions) {
       const id = getWajibPajakId(item);
       const nama = getNamaWajibPajak(item);
+      const kategori = getKategori(item);
       const pendapatan = getPendapatan(item);
       const pajak = getPajak(item);
       const totalPendapatanPajak = pendapatan + pajak;
@@ -383,6 +430,7 @@ export default function Laporan() {
         map.set(id, {
           id,
           nama,
+          kategori,
           jumlahTransaksi: 1,
           totalPendapatanPajak,
           totalPajak: pajak,
@@ -461,38 +509,205 @@ export default function Laporan() {
     SORT_OPTIONS.find((item) => item.key === sortBy)?.label ??
     "Urutkan Berdasarkan";
 
-  function downloadRingkasan() {
-    const header = [
-      "No",
-      "Nama",
-      "Jumlah Transaksi",
-      "Total Pendapatan + Pajak",
-      "Total Pajak",
-    ];
+  // FUNGSI UTAMA UNDUH
+  function executeDownload() {
+    let dataToExport = rows;
 
-    const body = rows.map((item, index) => [
-      index + 1,
-      item.nama,
-      item.jumlahTransaksi,
-      item.totalPendapatanPajak,
-      item.totalPajak,
-    ]);
+    // 1. Filter Kategori
+    if (selectedCategory !== "semua") {
+      dataToExport = rows.filter((r) => {
+        const cat = r.kategori.toLowerCase();
+        if (selectedCategory === "restoran")
+          return cat.includes("restoran") || cat.includes("restaurant");
+        if (selectedCategory === "hotel") return cat.includes("hotel");
+        if (selectedCategory === "hiburan")
+          return cat.includes("hiburan") || cat.includes("kesenian");
+        if (selectedCategory === "parkir") return cat.includes("parkir");
+        return true;
+      });
+    }
 
-    const csv = [header, ...body]
-      .map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
-      )
-      .join("\n");
+    if (exportFormat === "csv") {
+      // PROSES DOWNLOAD CSV
+      const header = [
+        "No",
+        "Nama",
+        "Jumlah Transaksi",
+        "Total Pendapatan + Pajak",
+        "Total Pajak",
+      ];
+      const body = dataToExport.map((item, index) => [
+        index + 1,
+        item.nama,
+        item.jumlahTransaksi,
+        item.totalPendapatanPajak,
+        item.totalPajak,
+      ]);
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+      const csvContent = [header, ...body]
+        .map((row) =>
+          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+        )
+        .join("\n");
 
-    link.href = url;
-    link.download = `laporan-transaksi-${startDate}-sampai-${endDate}.csv`;
-    link.click();
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `laporan-transaksi-${startDate}-sampai-${endDate}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } else {
+      // PROSES DOWNLOAD PDF MODERN (DASHBOARD STYLE)
+      const doc = new jsPDF("p", "mm", "a4");
 
-    URL.revokeObjectURL(url);
+      // HEADER
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("PEMERINTAH KABUPATEN ACEH TENGAH", 105, 16, {
+        align: "center",
+      });
+      doc.setFontSize(12);
+      doc.text("BADAN PENGELOLAAN KEUANGAN DAERAH", 105, 22, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        "Pusat Perkantoran Pemerintah Kab. Aceh Tengah, Takengon",
+        105,
+        27,
+        { align: "center" },
+      );
+
+      // GARIS PEMISAH HEADER
+      doc.setLineWidth(0.5);
+      doc.line(14, 31, 196, 31);
+
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("LAPORAN RINGKASAN TRANSAKSI WAJIB PAJAK", 105, 41, {
+        align: "center",
+      });
+
+      const selectedLabel =
+        KATEGORI_OPTIONS.find((k) => k.key === selectedCategory)?.label ?? "-";
+
+      // INFO LAPORAN
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("Periode Transaksi", 14, 51);
+      doc.text(
+        `: ${formatTanggalIndonesia(startDate)} - ${formatTanggalIndonesia(endDate)}`,
+        45,
+        51,
+      );
+      doc.text("Kategori Usaha", 14, 56);
+      doc.text(`: ${selectedLabel}`, 45, 56);
+      doc.text("Tanggal Cetak", 14, 61);
+      doc.text(`: ${new Date().toLocaleString("id-ID")}`, 45, 61);
+
+      // DISCLAIMER
+      doc.setFontSize(7);
+      doc.setTextColor(120);
+      const disclaimer =
+        "Disclaimer: Dokumen ini mencantumkan data wajib pajak sesuai filter kategori dan periode yang dipilih. Harap diperhatikan bahwa informasi ini bersifat rahasia dan penggunaannya diatur oleh kebijakan privasi dan keamanan data yang berlaku.";
+      const splitDisclaimer = doc.splitTextToSize(disclaimer, 182);
+      doc.text(splitDisclaimer, 14, 68);
+
+      // ==========================================
+      // KOTAK RINGKASAN GAYA DASHBOARD (SUPER RAPI)
+      // ==========================================
+      const totalTransaksi = dataToExport.reduce(
+        (sum, item) => sum + item.jumlahTransaksi,
+        0,
+      );
+      const totalPendapatan = dataToExport.reduce(
+        (sum, item) => sum + item.totalPendapatanPajak,
+        0,
+      );
+      const totalPjk = dataToExport.reduce(
+        (sum, item) => sum + item.totalPajak,
+        0,
+      );
+
+      doc.setDrawColor(200);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 80, 182, 18, 2, 2, "FD"); // Background Kotak
+
+      // Garis Pemisah Vertikal di Dalam Kotak
+      doc.setDrawColor(226, 232, 240);
+      doc.line(55, 80, 55, 98);
+      doc.line(100, 80, 100, 98);
+      doc.line(155, 80, 155, 98);
+
+      // Teks Label Atas (Warna Abu)
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.setFont("helvetica", "bold");
+      doc.text("Wajib Pajak", 34.5, 86, { align: "center" });
+      doc.text("Jumlah Transaksi", 77.5, 86, { align: "center" });
+      doc.text("Total Pendapatan + Pajak", 127.5, 86, { align: "center" });
+      doc.text("Total Pajak", 175.5, 86, { align: "center" });
+
+      // Teks Value Bawah (Warna Hitam)
+      doc.setFontSize(9);
+      doc.setTextColor(0);
+      doc.text(`${dataToExport.length} WP`, 34.5, 94, { align: "center" });
+      doc.text(`${totalTransaksi}`, 77.5, 94, { align: "center" });
+      doc.text(`${formatRupiah(totalPendapatan)}`, 127.5, 94, {
+        align: "center",
+      });
+      doc.text(`${formatRupiah(totalPjk)}`, 175.5, 94, { align: "center" });
+
+      // ==========================================
+      // TABEL TRANSAKSI
+      // ==========================================
+      autoTable(doc, {
+        startY: 105,
+        head: [
+          [
+            "No",
+            "Nama Wajib Pajak",
+            "Kategori",
+            "Jumlah Transaksi",
+            "Total Pend. + Pajak",
+            "Total Pajak",
+          ],
+        ],
+        body: dataToExport.map((item, index) => [
+          index + 1,
+          item.nama,
+          selectedCategory === "semua" ? item.kategori : selectedLabel,
+          item.jumlahTransaksi,
+          formatRupiah(item.totalPendapatanPajak),
+          formatRupiah(item.totalPajak),
+        ]),
+        theme: "grid",
+        headStyles: {
+          fillColor: [11, 46, 107],
+          textColor: 255,
+          fontSize: 8,
+          fontStyle: "bold",
+          halign: "center",
+        },
+        bodyStyles: { fontSize: 8, textColor: 50 },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 10 },
+          1: { halign: "left" },
+          2: { halign: "center", cellWidth: 25 },
+          3: { halign: "center", cellWidth: 25 },
+          4: { halign: "right", cellWidth: 35 },
+          5: { halign: "right", cellWidth: 35 },
+        },
+        styles: { cellPadding: 3 },
+      });
+
+      doc.save(`Laporan-Ringkasan-Transaksi.pdf`);
+    }
+
+    setIsDownloadModalOpen(false); // Tutup Modal setelah selesai unduh
   }
 
   return (
@@ -507,33 +722,44 @@ export default function Laporan() {
           borderBottom: `1px solid ${THEME.headerBorder}`,
         }}
       >
-        <div className="px-6 md:px-8 py-7 md:py-8 flex items-center gap-4">
+        <div className="px-6 md:px-8 py-7 md:py-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.14)",
+              }}
+            >
+              <img
+                src="/images/Logo.png"
+                alt="Logo Kabupaten Aceh Tengah"
+                className="w-8 h-8 object-contain"
+              />
+            </div>
+
+            <div className="min-w-0">
+              <div
+                className="text-white text-2xl md:text-[30px] leading-tight truncate"
+                style={{ fontWeight: 700 }}
+              >
+                {BRAND.title}
+              </div>
+
+              <div className="text-white/80 text-sm mt-1">{BRAND.subtitle}</div>
+            </div>
+          </div>
+
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+            className="flex items-center gap-3 px-5 py-3 rounded-2xl shrink-0 overflow-x-auto"
             style={{
               backgroundColor: "rgba(255,255,255,0.12)",
               border: "1px solid rgba(255,255,255,0.14)",
             }}
           >
-            <img
-              src="/images/Logo.png"
-              alt="Logo Kabupaten Aceh Tengah"
-              className="w-8 h-8 object-contain"
-            />
-          </div>
-
-          <div className="min-w-0">
-            <div
-              className="text-white text-2xl md:text-[30px] leading-tight truncate"
-              style={{ fontWeight: 700 }}
-            >
-              {BRAND.title}
-            </div>
-
-            <div className="text-white/80 text-sm mt-1">{BRAND.subtitle}</div>
-
-            <div className="text-white/65 text-xs font-semibold mt-2">
-              Periode: {formatTanggalIndonesia(startDate)} sampai{" "}
+            <CalendarDays className="w-5 h-5 text-white/80 shrink-0" />
+            <div className="text-white text-sm font-bold whitespace-nowrap">
+              {formatTanggalIndonesia(startDate)} -{" "}
               {formatTanggalIndonesia(endDate)}
             </div>
           </div>
@@ -565,8 +791,7 @@ export default function Laporan() {
           <SummaryCard
             label="Total Pendapatan + Pajak"
             title={formatRupiah(recap.totalPendapatanPajak)}
-            value={formatTanggalIndonesia(startDate)}
-            sub={`sampai ${formatTanggalIndonesia(endDate)}`}
+            sub={`${formatTanggalIndonesia(startDate)} - ${formatTanggalIndonesia(endDate)}`}
             icon={<Wallet className="w-5 h-5" />}
             iconBg="#DBEAFE"
             iconColor="#2563EB"
@@ -575,8 +800,7 @@ export default function Laporan() {
           <SummaryCard
             label="Total Pajak"
             title={formatRupiah(recap.totalPajak)}
-            value={formatTanggalIndonesia(startDate)}
-            sub={`sampai ${formatTanggalIndonesia(endDate)}`}
+            sub={`${formatTanggalIndonesia(startDate)} - ${formatTanggalIndonesia(endDate)}`}
             icon={<Coins className="w-5 h-5" />}
             iconBg="#F3E8FF"
             iconColor="#9333EA"
@@ -717,17 +941,17 @@ export default function Laporan() {
                 </div>
               </div>
 
+              {/* TOMBOL BUKA MODAL */}
               <button
                 type="button"
-                onClick={downloadRingkasan}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition text-sm"
+                onClick={() => setIsDownloadModalOpen(true)}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition text-sm shrink-0 font-bold"
                 style={{
-                  border: `1px solid ${THEME.border}`,
-                  color: THEME.text,
-                  fontWeight: 600,
+                  backgroundColor: THEME.headerBg,
+                  color: "#FFFFFF",
                 }}
               >
-                <Download className="w-4 h-4" style={{ color: "#EF4444" }} />
+                <Download className="w-4 h-4" />
                 Unduh Ringkasan
               </button>
             </div>
@@ -745,10 +969,10 @@ export default function Laporan() {
                 <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-52">
                   Jumlah Transaksi
                 </TableColumn>
-                <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-60">
+                <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-left min-w-60">
                   Total Pendapatan + Pajak
                 </TableColumn>
-                <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center min-w-52">
+                <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-left min-w-52">
                   Total Pajak
                 </TableColumn>
                 <TableColumn className="bg-transparent text-slate-500 font-extrabold text-[11px] uppercase text-center w-32">
@@ -801,13 +1025,13 @@ export default function Laporan() {
                         </Chip>
                       </TableCell>
 
-                      <TableCell className="text-center px-4 py-4">
+                      <TableCell className="text-left px-4 py-4">
                         <span className="font-extrabold text-slate-700">
                           {formatRupiah(item.totalPendapatanPajak)}
                         </span>
                       </TableCell>
 
-                      <TableCell className="text-center px-4 py-4">
+                      <TableCell className="text-left px-4 py-4">
                         <span className="font-extrabold text-slate-700">
                           {formatRupiah(item.totalPajak)}
                         </span>
@@ -928,10 +1152,121 @@ export default function Laporan() {
           className="pt-1 text-center text-xs"
           style={{ color: THEME.muted }}
         >
-          © {new Date().getFullYear()} {BRAND.subtitle} • PT. Biner Teknologi
-          Indonesia
+          ©️ 2026 Kabupaten Aceh Tengah • PT. Biner Teknologi Indonesia
         </div>
       </div>
+
+      {/* ========================================== */}
+      {/* POP-UP MODAL UNDUH PREMIUM                 */}
+      {/* ========================================== */}
+      <Modal
+        isOpen={isDownloadModalOpen}
+        onOpenChange={setIsDownloadModalOpen}
+        placement="center"
+        size="md"
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1 border-b border-slate-100 pb-4">
+                <h2 className="text-lg font-bold text-slate-800">
+                  Unduh Laporan Ringkasan
+                </h2>
+                <p className="text-sm font-normal text-slate-500">
+                  Sesuaikan parameter laporan yang ingin Anda unduh.
+                </p>
+              </ModalHeader>
+
+              <ModalBody className="py-6 flex flex-col gap-5">
+                {/* PILIH KATEGORI */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Kategori Wajib Pajak
+                  </label>
+                  <Select
+                    placeholder="Pilih Kategori"
+                    selectedKeys={[selectedCategory]}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full"
+                    variant="bordered"
+                  >
+                    {KATEGORI_OPTIONS.map((cat) => (
+                      <SelectItem key={cat.key}>{cat.label}</SelectItem>
+                    ))}
+                  </Select>
+                </div>
+
+                {/* PILIH FORMAT FILE */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Format Laporan
+                  </label>
+                  <Select
+                    placeholder="Pilih Format"
+                    selectedKeys={[exportFormat]}
+                    onChange={(e) => setExportFormat(e.target.value)}
+                    className="w-full"
+                    variant="bordered"
+                  >
+                    <SelectItem
+                      key="pdf"
+                      startContent={
+                        <span className="text-red-500 font-bold mr-1">PDF</span>
+                      }
+                    >
+                      Dokumen Cetak Resmi (.pdf)
+                    </SelectItem>
+                    <SelectItem
+                      key="csv"
+                      startContent={
+                        <span className="text-green-600 font-bold mr-1">
+                          CSV
+                        </span>
+                      }
+                    >
+                      Data Excel Spreadsheet (.csv)
+                    </SelectItem>
+                  </Select>
+                </div>
+
+                {/* INFO PERIODE (READ-ONLY) */}
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3 mt-1">
+                  <CalendarDays className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900">
+                      Periode Laporan Terpilih
+                    </p>
+                    <p className="text-xs font-medium text-blue-700 mt-1">
+                      {formatTanggalIndonesia(startDate)} -{" "}
+                      {formatTanggalIndonesia(endDate)}
+                    </p>
+                  </div>
+                </div>
+              </ModalBody>
+
+              <ModalFooter className="border-t border-slate-100 pt-4">
+                <Button
+                  color="danger"
+                  variant="light"
+                  onPress={onClose}
+                  className="font-semibold"
+                >
+                  Batal
+                </Button>
+                <Button
+                  color="primary"
+                  onPress={executeDownload}
+                  style={{ backgroundColor: THEME.headerBg, color: "#fff" }}
+                  className="font-semibold shadow-md"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Unduh Sekarang
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

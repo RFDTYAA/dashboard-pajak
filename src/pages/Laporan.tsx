@@ -29,6 +29,7 @@ import {
   Wallet,
   Coins,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -308,6 +309,7 @@ function SummaryCard({
 }
 
 export default function Laporan() {
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState<RawTransaction[]>([]);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("highestRevenue");
@@ -937,11 +939,7 @@ export default function Laporan() {
                           type="button"
                           className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold hover:underline"
                           style={{ color: THEME.accent }}
-                          onClick={() =>
-                            alert(
-                              `${item.nama}\n\nJumlah transaksi: ${item.jumlahTransaksi}\nTotal pendapatan + pajak: ${formatRupiah(item.totalPendapatanPajak)}\nTotal pajak: ${formatRupiah(item.totalPajak)}`,
-                            )
-                          }
+                          onClick={() => navigate(`/laporan/${item.id}`)}
                         >
                           <Eye className="w-4 h-4" /> Detail
                         </button>
@@ -1005,7 +1003,8 @@ export default function Laporan() {
           className="pt-1 text-center text-xs"
           style={{ color: THEME.muted }}
         >
-          © 2026 Kabupaten Aceh Tengah • PT. Biner Teknologi Indonesia
+          © {new Date().getFullYear()} Kabupaten Aceh Tengah • PT. Biner
+          Teknologi Indonesia
         </div>
       </div>
 
@@ -1015,9 +1014,7 @@ export default function Laporan() {
         placement="center"
         size="xl"
         backdrop="blur"
-        classNames={{
-          backdrop: "bg-black/40",
-        }}
+        classNames={{ backdrop: "bg-black/40" }}
       >
         <ModalContent className="rounded-2xl shadow-2xl border border-slate-200 bg-white">
           {(onClose) => (
@@ -1115,8 +1112,7 @@ export default function Laporan() {
                   onPress={executeDownload}
                   className="font-semibold px-7 bg-[#0B2E6B] text-white rounded-xl"
                 >
-                  <Download className="w-4 h-4 mr-2" />
-                  Unduh Sekarang
+                  <Download className="w-4 h-4 mr-2" /> Unduh Sekarang
                 </Button>
               </ModalFooter>
             </>

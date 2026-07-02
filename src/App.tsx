@@ -3,6 +3,7 @@ import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardApp from "./dashboard/DashboardApp";
 import Analisis from "./pages/Analisis";
+import DetailLaporanTransaksi from "./pages/DetailLaporanTransaksi";
 import DetailWajibPajak from "./pages/DetailWajibPajak";
 import EditWajibPajak from "./pages/EditWajibPajak";
 import Laporan from "./pages/Laporan";
@@ -84,6 +85,7 @@ export default function App() {
           }
         >
           <Route index element={<Laporan />} />
+          <Route path=":id" element={<DetailLaporanTransaksi />} />
         </Route>
 
         <Route
